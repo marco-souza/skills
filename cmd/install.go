@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/marco-souza/skills/internal/skills"
 	"github.com/spf13/cobra"
@@ -17,7 +18,10 @@ var installCmd = &cobra.Command{
 	Use:     "install <skill>...",
 	Aliases: []string{"i"},
 	Short:   "Install skill(s) to a target project",
-	Long: `Install one or more skills to a target project's .agents/skills directory.
+	Long: `Install one or more skills to a target project directory.
+
+Skills are written to .agents/skills/ by default. Use -t to replace
+.agents with a custom directory (e.g., -t .opencode writes to .opencode/skills/).
 
 Skills are resolved from the local .agents/skills directory by default.
 Use --repo to install from a remote GitHub repository.
@@ -53,7 +57,15 @@ Examples:
 		installer := &skills.Installer{SourceDir: sourceDir}
 
 		for _, name := range args {
-			if err := installer.Install(name, target); err != nil {
+			// When -t is explicitly set, it replaces .agents as the skills parent directory.
+			// When not set, skills go to .agents/skills/ in the target project.
+			var parentDir string
+			if targetFlag != "" {
+				parentDir = target
+			} else {
+				parentDir = filepath.Join(target, ".agents")
+			}
+			if err := installer.Install(name, parentDir); err != nil {
 				return fmt.Errorf("installing %q: %w", name, err)
 			}
 		}

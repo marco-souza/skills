@@ -21,7 +21,9 @@ func (i *Installer) sourceDir() string {
 }
 
 // Install copies a single skill to the target project.
-func (i *Installer) Install(skillName, targetPath string) error {
+// parentDir is the directory that contains the skills/ subdirectory
+// (e.g., ".agents" or ".opencode").
+func (i *Installer) Install(skillName, parentDir string) error {
 	skillsDir := filepath.Join(i.sourceDir(), defaultSkillsDir, skillsSubDir)
 	skillSrc := filepath.Join(skillsDir, skillName)
 
@@ -29,7 +31,7 @@ func (i *Installer) Install(skillName, targetPath string) error {
 		return fmt.Errorf("skill %q not found in %s", skillName, skillsDir)
 	}
 
-	skillDest := filepath.Join(targetPath, defaultSkillsDir, skillsSubDir, skillName)
+	skillDest := filepath.Join(parentDir, skillsSubDir, skillName)
 
 	if err := os.MkdirAll(filepath.Dir(skillDest), 0755); err != nil {
 		return fmt.Errorf("creating target directory: %w", err)
@@ -44,7 +46,8 @@ func (i *Installer) Install(skillName, targetPath string) error {
 }
 
 // InstallFromGitHub clones a GitHub repo and installs all its skills to the target.
-func (i *Installer) InstallFromGitHub(src *GitHubSource, targetPath string) error {
+// parentDir is the directory that contains the skills/ subdirectory.
+func (i *Installer) InstallFromGitHub(src *GitHubSource, parentDir string) error {
 	repoDir, cleanup, err := CloneRepo(src)
 	if err != nil {
 		return err
@@ -67,7 +70,7 @@ func (i *Installer) InstallFromGitHub(src *GitHubSource, targetPath string) erro
 			continue
 		}
 		skillSrc := filepath.Join(skillsPath, entry.Name())
-		skillDest := filepath.Join(targetPath, defaultSkillsDir, skillsSubDir, entry.Name())
+		skillDest := filepath.Join(parentDir, skillsSubDir, entry.Name())
 
 		if err := os.MkdirAll(filepath.Dir(skillDest), 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
@@ -80,7 +83,7 @@ func (i *Installer) InstallFromGitHub(src *GitHubSource, targetPath string) erro
 		count++
 	}
 
-	fmt.Printf("Installed %d skills from %s to %s\n", count, src.SSHURL, targetPath)
+	fmt.Printf("Installed %d skills from %s to %s\n", count, src.SSHURL, parentDir)
 	return nil
 }
 

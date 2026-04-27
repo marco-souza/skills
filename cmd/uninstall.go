@@ -18,7 +18,10 @@ var uninstallCmd = &cobra.Command{
 	Use:     "uninstall <skill>...",
 	Aliases: []string{"rm", "remove"},
 	Short:   "Uninstall skill(s) from a project",
-	Long: `Remove one or more skills from a project's .agents/skills directory.
+	Long: `Remove one or more skills from a target project directory.
+
+Skills are removed from .agents/skills/ by default. Use -t to replace
+.agents with a custom directory (e.g., -t .opencode removes from .opencode/skills/).
 
 Examples:
   skills uninstall git-commit-formatter
@@ -34,7 +37,13 @@ Examples:
 			target = "."
 		}
 
-		skillsDir := skills.ResolveToSkillsDir(target)
+		// When -t is explicitly set, it replaces .agents as the skills parent directory.
+		var skillsDir string
+		if targetFlag != "" {
+			skillsDir = filepath.Join(target, "skills")
+		} else {
+			skillsDir = skills.ResolveToSkillsDir(target)
+		}
 
 		for _, name := range args {
 			skillPath := filepath.Join(skillsDir, name)
