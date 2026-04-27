@@ -1,6 +1,6 @@
 # Skills CLI
 
-A Go CLI tool for managing AI agent skills — reusable skill definitions stored as `SKILL.md` files in `.agents/skills/` directories.
+A lightweight Go CLI tool for managing AI agent skills — reusable skill definitions stored as `SKILL.md` files in `.agents/skills/` directories.
 
 ## Installation
 
@@ -8,7 +8,7 @@ A Go CLI tool for managing AI agent skills — reusable skill definitions stored
 go install github.com/marco-souza/skills@latest
 ```
 
-Requires Go 1.21+. The binary installs to `$GOPATH/bin` or `$HOME/go/bin`.
+Requires Go 1.22+. The binary installs to `$GOPATH/bin` or `$HOME/go/bin`.
 
 ## Quick Start
 
@@ -16,36 +16,32 @@ Requires Go 1.21+. The binary installs to `$GOPATH/bin` or `$HOME/go/bin`.
 # List available skills
 skills list
 
-# Validate all skills
-skills validate
-
-# Search for a skill
-skills s git
-
 # Install a skill to a project
-skills i git-commit-formatter -t ~/my-project
+skills install git-commit-formatter -t ~/my-project
 
 # Create a new skill
-skills a my-new-skill
+skills add my-new-skill
+
+# Remove a skill
+skills uninstall my-new-skill
 ```
 
 ## Commands
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
-| `skills list [path]` | `ls` | List all available skills |
-| `skills add <name>` | `a` | Create a new skill from template |
-| `skills validate [path]` | — | Validate skill format and structure |
+| `skills list [path]` | `ls` | List skills from local or remote repo |
 | `skills install <skill>...` | `i` | Install skill(s) to a target project |
+| `skills uninstall <skill>...` | `rm`, `remove` | Remove skill(s) from a project |
+| `skills add <name>` | `a` | Create a new skill from template |
 | `skills init [path]` | — | Initialize a project with `.agents` structure |
-| `skills search <query>` | `s` | Search skills by name, description, or content |
+| `skills config` | — | Manage persistent CLI configuration |
 
 ### Global Flags
 
 | Flag | Description |
 |------|-------------|
-| `-r, --root string` | Root directory for skills operations (default: from config) |
-| `--repo string` | Remote GitHub repo, e.g. `marco-souza/skills` (default: from config) |
+| `-r, --repo string` | GitHub repo (owner/repo) for remote operations |
 | `-h, --help` | Help for any command |
 | `-v, --version` | Show version |
 
@@ -55,12 +51,12 @@ skills a my-new-skill
 
 ### `skills list` / `skills ls`
 
-List all skills in the current project's `.agents/skills/` directory.
+List skills from the local `.agents/skills` directory. Use `--repo` to list from a remote GitHub repository.
 
 ```bash
-skills list                    # List local skills
-skills ls --category git       # Filter by category
-skills ls -r /other/project    # List from a different project
+skills ls                      # List local skills
+skills ls -r marco-souza/skills  # List from a remote repo
+skills ls ~/other-project      # List from a different project
 ```
 
 ### `skills add` / `skills a`
@@ -70,7 +66,6 @@ Create a new skill directory with a `SKILL.md` scaffold.
 ```bash
 skills a my-skill              # Create in current project
 skills a my-skill -t ~/project # Create in a specific project
-skills a my-skill --from ./template  # Use a custom template
 ```
 
 Creates:
@@ -78,24 +73,6 @@ Creates:
 .agents/skills/my-skill/
 └── SKILL.md
 ```
-
-### `skills validate`
-
-Validate all skills for correct YAML frontmatter, required fields, and naming conventions.
-
-```bash
-skills validate                # Validate all skills
-skills validate --fix          # Auto-fix issues (name mismatches)
-skills validate .agents/skills/my-skill/SKILL.md  # Validate one file
-```
-
-Checks:
-- Valid YAML frontmatter
-- Required `name` and `description` fields
-- Description under 1024 characters
-- Name matches directory name
-- Name uses lowercase + hyphens only
-- Description includes "Use when" and "Do NOT use when" triggers
 
 ### `skills install` / `skills i`
 
@@ -108,25 +85,30 @@ skills i git-commit-formatter -t ~/my-project
 # Multiple skills
 skills i git-commit-formatter pr-review -t ~/my-project
 
-# All skills
-skills i --all -t ~/my-project
-
-# By category
-skills i --category git -t ~/my-project
-
-# From a GitHub repo (clones via SSH)
-skills i marco/skills -t ~/my-project
-
-# Dry run
-skills i git-commit-formatter --dry-run -t ~/my-project
+# From a GitHub repo
+skills i git-commit-formatter -r marco-souza/skills -t ~/my-project
 ```
 
 | Flag | Description |
 |------|-------------|
-| `-t, --target string` | Target project directory |
-| `--all` | Install all available skills |
-| `-c, --category string` | Install skills matching category |
-| `--dry-run` | Show what would be copied |
+| `-t, --target string` | Target project directory (default: current) |
+| `-r, --repo string` | GitHub repo to install from |
+
+### `skills uninstall` / `skills rm` / `skills remove`
+
+Remove one or more skills from a project.
+
+```bash
+# Single skill
+skills uninstall git-commit-formatter
+
+# Multiple skills
+skills uninstall git-commit-formatter pr-review -t ~/my-project
+```
+
+| Flag | Description |
+|------|-------------|
+| `-t, --target string` | Target project directory (default: current) |
 
 ### `skills config`
 
@@ -144,13 +126,7 @@ skills config set default_root ~/projects
 | `default_repo` | Fallback repo when `--repo` is not set | `marco-souza/skills` |
 | `default_root` | Fallback root when `--root` is not set | `.` |
 
-Config values are used automatically by all commands when the corresponding flag is omitted.
-
 ### `skills init`
-
-Initialize a project with the `.agents/skills/` directory structure and a starter `AGENTS.md`.
-
----
 
 Initialize a project with the `.agents/skills/` directory structure and a starter `AGENTS.md`.
 
@@ -164,16 +140,6 @@ Creates:
 .agents/
 ├── AGENTS.md
 └── skills/
-```
-
-### `skills search` / `skills s`
-
-Search skills by name, description, or content.
-
-```bash
-skills s git                   # Search for "git"
-skills s "commit message"      # Multi-word search
-skills s git --tag devops      # Filter by tag
 ```
 
 ---
@@ -239,15 +205,14 @@ skills/
 │   ├── root.go
 │   ├── list.go
 │   ├── add.go
-│   ├── validate.go
 │   ├── install.go
+│   ├── uninstall.go
 │   ├── init.go
-│   └── search.go
+│   └── config.go
 ├── internal/
 │   ├── skills/               # Core logic
 │   │   ├── skill.go
 │   │   ├── loader.go
-│   │   ├── validator.go
 │   │   ├── installer.go
 │   │   ├── resolver.go
 │   │   ├── remote.go
@@ -258,35 +223,6 @@ skills/
 ├── .agents/skills/         # This repo's skill definitions
 ├── testdata/               # Test fixtures
 └── go.mod
-```
-
----
-
-## Workflow
-
-### Adding a skill to this repo
-
-```bash
-skills a my-new-skill          # Scaffold
-# Edit .agents/skills/my-new-skill/SKILL.md
-skills validate                # Check format
-git add .agents/skills/my-new-skill/
-git commit -m "fea: add my-new-skill"
-```
-
-### Installing skills to another project
-
-```bash
-cd ~/my-project
-skills init                    # Create .agents/skills/
-skills i git-commit-formatter pr-review -t .  # Install skills
-```
-
-### Validating before committing
-
-```bash
-skills validate                # Catch issues early
-skills validate --fix          # Auto-fix name mismatches
 ```
 
 ---

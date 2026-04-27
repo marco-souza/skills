@@ -71,26 +71,18 @@ func toTitle(s string) string {
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().StringP("from", "f", "", "Use a custom template file")
-	addCmd.Flags().StringP("target", "d", "", "Target project directory (default: current)")
 }
 
 var addCmd = &cobra.Command{
 	Use:     "add <name>",
 	Aliases: []string{"a"},
 	Short:   "Create a new skill from template",
-	Long:  `Create a new skill directory with a SKILL.md file from the default or custom template.`,
-	Args:  cobra.ExactArgs(1),
+	Long:    `Create a new skill directory with a SKILL.md file from the default template.`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
-		target, _ := cmd.Flags().GetString("target")
-		fromTemplate, _ := cmd.Flags().GetString("from")
 
-		if target == "" {
-			target, _ = cmd.Flags().GetString("root")
-		}
-
-		skillsDir := skills.ResolveToSkillsDir(target)
+		skillsDir := skills.ResolveToSkillsDir(".")
 		skillPath := filepath.Join(skillsDir, name)
 		skillFile := filepath.Join(skillPath, "SKILL.md")
 
@@ -102,16 +94,7 @@ var addCmd = &cobra.Command{
 			return fmt.Errorf("creating skill directory: %w", err)
 		}
 
-		var tmpl *template.Template
-		if fromTemplate != "" {
-			var err error
-			tmpl, err = template.ParseFiles(fromTemplate)
-			if err != nil {
-				return fmt.Errorf("parsing template: %w", err)
-			}
-		} else {
-			tmpl = template.Must(template.New("skill").Parse(defaultSkillTemplate))
-		}
+		tmpl := template.Must(template.New("skill").Parse(defaultSkillTemplate))
 
 		f, err := os.Create(skillFile)
 		if err != nil {

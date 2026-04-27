@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/marco-souza/skills/internal/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -29,14 +28,10 @@ Subcommands:
 var configListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "Show all config values",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
-		if err != nil {
-			return err
-		}
+	RunE: func(*cobra.Command, []string) error {
 		out, err := yaml.Marshal(cfg)
 		if err != nil {
-			return err
+			return fmt.Errorf("marshaling config: %w", err)
 		}
 		fmt.Print(string(out))
 		return nil
@@ -47,11 +42,7 @@ var configGetCmd = &cobra.Command{
 	Use:   "get <key>",
 	Short: "Get a config value",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
-		if err != nil {
-			return err
-		}
+	RunE: func(_ *cobra.Command, args []string) error {
 		switch args[0] {
 		case "default_repo":
 			fmt.Println(cfg.DefaultRepo)
@@ -68,11 +59,7 @@ var configSetCmd = &cobra.Command{
 	Use:   "set <key> <value>",
 	Short: "Set a config value",
 	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
-		if err != nil {
-			return err
-		}
+	RunE: func(_ *cobra.Command, args []string) error {
 		switch args[0] {
 		case "default_repo":
 			cfg.DefaultRepo = args[1]
@@ -82,7 +69,7 @@ var configSetCmd = &cobra.Command{
 			return fmt.Errorf("unknown config key: %s (valid: default_repo, default_root)", args[0])
 		}
 		if err := cfg.Save(); err != nil {
-			return err
+			return fmt.Errorf("saving config: %w", err)
 		}
 		fmt.Printf("Set %s = %s\n", args[0], args[1])
 		return nil
