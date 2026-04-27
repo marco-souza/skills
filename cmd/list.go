@@ -23,33 +23,35 @@ var listCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		category, _ := cmd.Flags().GetString("category")
-
+		repo, _ := cmd.Flags().GetString("repo")
 		root, _ := cmd.Flags().GetString("root")
 		path := root
 		if len(args) > 0 {
 			path = args[0]
 		}
 
-		loader := skills.NewLoader(path)
-		list, err := loader.LoadAll()
-		if err != nil {
-			return err
-		}
+		return skills.WithRemoteRepo(repo, path, func(root string) error {
+			loader := skills.NewLoader(root)
+			list, err := loader.LoadAll()
+			if err != nil {
+				return err
+			}
 
-		list = skills.FilterSkills(list, category, nil)
+			list = skills.FilterSkills(list, category, nil)
 
-		if format == "json" {
-			return json.NewEncoder(os.Stdout).Encode(list)
-		}
+			if format == "json" {
+				return json.NewEncoder(os.Stdout).Encode(list)
+			}
 
-		if len(list) == 0 {
-			fmt.Println("No skills found.")
+			if len(list) == 0 {
+				fmt.Println("No skills found.")
+				return nil
+			}
+
+			printSkillsTable(list)
+			fmt.Printf("\n%d skills found\n", len(list))
 			return nil
-		}
-
-		printSkillsTable(list)
-		fmt.Printf("\n%d skills found\n", len(list))
-		return nil
+		})
 	},
 }
 

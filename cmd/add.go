@@ -71,7 +71,7 @@ func toTitle(s string) string {
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().StringP("from", "t", "", "Use a custom template file")
+	addCmd.Flags().StringP("from", "f", "", "Use a custom template file")
 	addCmd.Flags().StringP("target", "d", "", "Target project directory (default: current)")
 }
 

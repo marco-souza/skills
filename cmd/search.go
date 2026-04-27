@@ -25,35 +25,36 @@ var searchCmd = &cobra.Command{
 		query := args[0]
 		format, _ := cmd.Flags().GetString("format")
 		tag, _ := cmd.Flags().GetString("tag")
-
+		repo, _ := cmd.Flags().GetString("repo")
 		root, _ := cmd.Flags().GetString("root")
-		path := root
 
-		loader := skills.NewLoader(path)
-		all, err := loader.LoadAll()
-		if err != nil {
-			return err
-		}
+		return skills.WithRemoteRepo(repo, root, func(root string) error {
+			loader := skills.NewLoader(root)
+			all, err := loader.LoadAll()
+			if err != nil {
+				return err
+			}
 
-		var results []*skills.Skill
-		if tag != "" {
-			results = skills.FilterSkills(all, "", []string{tag})
-		} else {
-			results = skills.SearchSkills(all, query)
-		}
+			var results []*skills.Skill
+			if tag != "" {
+				results = skills.FilterSkills(all, "", []string{tag})
+			} else {
+				results = skills.SearchSkills(all, query)
+			}
 
-		if len(results) == 0 {
-			fmt.Println("No skills found.")
+			if len(results) == 0 {
+				fmt.Println("No skills found.")
+				return nil
+			}
+
+			if format == "json" {
+				return json.NewEncoder(os.Stdout).Encode(results)
+			}
+
+			printSearchTable(results)
+			fmt.Printf("\n%d skills found\n", len(results))
 			return nil
-		}
-
-		if format == "json" {
-			return json.NewEncoder(os.Stdout).Encode(results)
-		}
-
-		printSearchTable(results)
-		fmt.Printf("\n%d skills found\n", len(results))
-		return nil
+		})
 	},
 }
 

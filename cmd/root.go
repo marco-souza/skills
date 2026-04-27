@@ -33,4 +33,5 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringP("root", "r", ".", "Root directory for skills operations")
+	rootCmd.PersistentFlags().StringP("repo", "", "marco-souza/skills", "Remote GitHub repo (owner/repo or full URL)")
 }
