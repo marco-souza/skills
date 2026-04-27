@@ -1,0 +1,90 @@
+package cmd
+
+import (
+	"fmt"
+
+	"github.com/marco-souza/skills/internal/config"
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
+)
+
+func init() {
+	rootCmd.AddCommand(configCmd)
+	configCmd.AddCommand(configGetCmd)
+	configCmd.AddCommand(configSetCmd)
+	configCmd.AddCommand(configListCmd)
+}
+
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Manage persistent CLI configuration",
+	Long: `Manage persistent CLI configuration stored at ~/.config/skills/config.yaml.
+
+Subcommands:
+  skills config get <key>   Get a config value
+  skills config set <k> <v> Set a config value
+  skills config list        Show all config values`,
+}
+
+var configListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "Show all config values",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+		out, err := yaml.Marshal(cfg)
+		if err != nil {
+			return err
+		}
+		fmt.Print(string(out))
+		return nil
+	},
+}
+
+var configGetCmd = &cobra.Command{
+	Use:   "get <key>",
+	Short: "Get a config value",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+		switch args[0] {
+		case "default_repo":
+			fmt.Println(cfg.DefaultRepo)
+		case "default_root":
+			fmt.Println(cfg.DefaultRoot)
+		default:
+			return fmt.Errorf("unknown config key: %s (valid: default_repo, default_root)", args[0])
+		}
+		return nil
+	},
+}
+
+var configSetCmd = &cobra.Command{
+	Use:   "set <key> <value>",
+	Short: "Set a config value",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+		switch args[0] {
+		case "default_repo":
+			cfg.DefaultRepo = args[1]
+		case "default_root":
+			cfg.DefaultRoot = args[1]
+		default:
+			return fmt.Errorf("unknown config key: %s (valid: default_repo, default_root)", args[0])
+		}
+		if err := cfg.Save(); err != nil {
+			return err
+		}
+		fmt.Printf("Set %s = %s\n", args[0], args[1])
+		return nil
+	},
+}

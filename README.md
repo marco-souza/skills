@@ -44,7 +44,8 @@ skills a my-new-skill
 
 | Flag | Description |
 |------|-------------|
-| `-r, --root string` | Root directory for skills operations (default: `.`) |
+| `-r, --root string` | Root directory for skills operations (default: from config) |
+| `--repo string` | Remote GitHub repo, e.g. `marco-souza/skills` (default: from config) |
 | `-h, --help` | Help for any command |
 | `-v, --version` | Show version |
 
@@ -58,7 +59,6 @@ List all skills in the current project's `.agents/skills/` directory.
 
 ```bash
 skills list                    # List local skills
-skills ls --format json        # Output as JSON
 skills ls --category git       # Filter by category
 skills ls -r /other/project    # List from a different project
 ```
@@ -128,7 +128,29 @@ skills i git-commit-formatter --dry-run -t ~/my-project
 | `-c, --category string` | Install skills matching category |
 | `--dry-run` | Show what would be copied |
 
+### `skills config`
+
+Manage persistent CLI configuration stored at `~/.config/skills/config.yaml`.
+
+```bash
+skills config list             # Show all settings
+skills config get default_repo # Get default repo
+skills config set default_repo my-org/skills
+skills config set default_root ~/projects
+```
+
+| Setting | Description | Default |
+|---------|-------------|--------|
+| `default_repo` | Fallback repo when `--repo` is not set | `marco-souza/skills` |
+| `default_root` | Fallback root when `--root` is not set | `.` |
+
+Config values are used automatically by all commands when the corresponding flag is omitted.
+
 ### `skills init`
+
+Initialize a project with the `.agents/skills/` directory structure and a starter `AGENTS.md`.
+
+---
 
 Initialize a project with the `.agents/skills/` directory structure and a starter `AGENTS.md`.
 
@@ -152,7 +174,6 @@ Search skills by name, description, or content.
 skills s git                   # Search for "git"
 skills s "commit message"      # Multi-word search
 skills s git --tag devops      # Filter by tag
-skills s git --format json     # JSON output
 ```
 
 ---
@@ -222,13 +243,17 @@ skills/
 │   ├── install.go
 │   ├── init.go
 │   └── search.go
-├── internal/skills/        # Core logic
-│   ├── skill.go
-│   ├── loader.go
-│   ├── validator.go
-│   ├── installer.go
-│   ├── resolver.go
-│   └── frontmatter.go
+├── internal/
+│   ├── skills/               # Core logic
+│   │   ├── skill.go
+│   │   ├── loader.go
+│   │   ├── validator.go
+│   │   ├── installer.go
+│   │   ├── resolver.go
+│   │   ├── remote.go
+│   │   └── frontmatter.go
+│   └── config/               # Persistent CLI config
+│       └── config.go
 ├── main.go
 ├── .agents/skills/         # This repo's skill definitions
 ├── testdata/               # Test fixtures
@@ -268,17 +293,22 @@ skills validate --fix          # Auto-fix name mismatches
 
 ## Configuration
 
-Optional `.skills.yaml` in the project root:
+Persistent config lives at `~/.config/skills/config.yaml`:
 
 ```yaml
-skills_dir: .agents/skills
-categories:
-  - git
-  - review
-  - terminal
+default_repo: marco-souza/skills
+default_root: .
 ```
 
-Override the config path with `SKILLS_CONFIG` env var.
+These values are used as fallbacks when `--repo` or `--root` flags are not provided.
+
+Manage via CLI:
+
+```bash
+skills config list              # Show current settings
+skills config set default_repo my-org/skills
+skills config set default_root ~/workspace
+```
 
 ---
 

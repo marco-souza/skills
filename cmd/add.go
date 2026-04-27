@@ -87,7 +87,7 @@ var addCmd = &cobra.Command{
 		fromTemplate, _ := cmd.Flags().GetString("from")
 
 		if target == "" {
-			target = "."
+			target, _ = cmd.Flags().GetString("root")
 		}
 
 		skillsDir := skills.ResolveToSkillsDir(target)
