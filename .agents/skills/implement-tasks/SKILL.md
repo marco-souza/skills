@@ -8,6 +8,10 @@ description: >
   Do NOT use when no tasks.json exists (run prd-to-tasks first), for a single
   straightforward task (just do it directly), or when the user wants manual control
   over each step.
+metadata:
+  scripts:
+    - ../../scripts/validate-dag.py
+  runtime: python3
 ---
 
 # Implement Tasks

@@ -6,6 +6,10 @@ description: >
   Use when a PRD exists and the user wants to break it down into implementable tasks,
   or says "turn this into tasks," "create issues from the PRD," or "what are the next steps?"
   Do NOT use when there is no PRD or when the user wants to skip planning and start coding immediately.
+metadata:
+  scripts:
+    - ../../scripts/validate-dag.py
+  runtime: python3
 ---
 
 # PRD to Tasks

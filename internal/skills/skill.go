@@ -10,14 +10,15 @@ import (
 
 // Skill represents an AI agent skill definition.
 type Skill struct {
-	Name        string   `yaml:"name"`
-	Description string   `yaml:"description"`
-	Tags        []string `yaml:"tags,omitempty"`
-	Category    string   `yaml:"category,omitempty"`
-	Author      string   `yaml:"author,omitempty"`
-	Version     string   `yaml:"version,omitempty"`
-	Path        string   `json:"-"`
-	Content     string   `json:"-"`
+	Name        string                 `yaml:"name"`
+	Description string                 `yaml:"description"`
+	Tags        []string               `yaml:"tags,omitempty"`
+	Category    string                 `yaml:"category,omitempty"`
+	Author      string                 `yaml:"author,omitempty"`
+	Version     string                 `yaml:"version,omitempty"`
+	Metadata    map[string]interface{} `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	Path        string                 `json:"-"`
+	Content     string                 `json:"-"`
 }
 
 var nameRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$|^[a-z0-9]$`)
@@ -94,7 +95,41 @@ func (s *Skill) LoadFromPath(path string) error {
 	if version, ok := frontmatter["version"].(string); ok {
 		s.Version = version
 	}
+	if metadata, ok := frontmatter["metadata"].(map[string]interface{}); ok {
+		s.Metadata = metadata
+	}
 
 	s.Content = strings.TrimSpace(body)
 	return nil
+}
+
+// Scripts returns the list of script dependencies from metadata.scripts.
+// Returns an empty slice if metadata.scripts is absent or not a list of strings.
+func (s *Skill) Scripts() []string {
+	if s.Metadata == nil {
+		return []string{}
+	}
+	scriptsRaw, ok := s.Metadata["scripts"].([]interface{})
+	if !ok {
+		return []string{}
+	}
+	scripts := make([]string, 0, len(scriptsRaw))
+	for _, item := range scriptsRaw {
+		if script, ok := item.(string); ok {
+			scripts = append(scripts, script)
+		}
+	}
+	return scripts
+}
+
+// Runtime returns the runtime identifier from metadata.runtime.
+// Returns an empty string if metadata.runtime is absent or not a string.
+func (s *Skill) Runtime() string {
+	if s.Metadata == nil {
+		return ""
+	}
+	if runtime, ok := s.Metadata["runtime"].(string); ok {
+		return runtime
+	}
+	return ""
 }
