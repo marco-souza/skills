@@ -8,8 +8,8 @@ import (
 
 func TestDefault(t *testing.T) {
 	cfg := Default()
-	if cfg.DefaultRepo != DefaultRepo {
-		t.Errorf("expected default_repo %q, got %q", DefaultRepo, cfg.DefaultRepo)
+	if cfg.DefaultSource != DefaultSource {
+		t.Errorf("expected default_source %q, got %q", DefaultSource, cfg.DefaultSource)
 	}
 	if cfg.DefaultRoot != DefaultRoot {
 		t.Errorf("expected default_root %q, got %q", DefaultRoot, cfg.DefaultRoot)
@@ -22,7 +22,7 @@ func TestLoadSave(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", testDir)
 
 	cfg := Default()
-	cfg.DefaultRepo = "test-org/test-repo"
+	cfg.DefaultSource = "test-org/test-repo"
 	cfg.DefaultRoot = "/test/path"
 
 	if err := cfg.Save(); err != nil {
@@ -34,8 +34,8 @@ func TestLoadSave(t *testing.T) {
 		t.Fatalf("load failed: %v", err)
 	}
 
-	if loaded.DefaultRepo != "test-org/test-repo" {
-		t.Errorf("expected repo %q, got %q", "test-org/test-repo", loaded.DefaultRepo)
+	if loaded.DefaultSource != "test-org/test-repo" {
+		t.Errorf("expected source %q, got %q", "test-org/test-repo", loaded.DefaultSource)
 	}
 	if loaded.DefaultRoot != "/test/path" {
 		t.Errorf("expected root %q, got %q", "/test/path", loaded.DefaultRoot)
@@ -58,8 +58,8 @@ func TestLoadDefaultsWhenMissing(t *testing.T) {
 		t.Fatalf("load failed: %v", err)
 	}
 
-	if cfg.DefaultRepo != DefaultRepo {
-		t.Errorf("expected default repo %q, got %q", DefaultRepo, cfg.DefaultRepo)
+	if cfg.DefaultSource != DefaultSource {
+		t.Errorf("expected default source %q, got %q", DefaultSource, cfg.DefaultSource)
 	}
 	if cfg.DefaultRoot != DefaultRoot {
 		t.Errorf("expected default root %q, got %q", DefaultRoot, cfg.DefaultRoot)

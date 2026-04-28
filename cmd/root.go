@@ -37,5 +37,5 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringP("repo", "r", "", "GitHub repo (owner/repo) for remote operations")
+	rootCmd.PersistentFlags().StringP("source", "s", "", "Source for skills: GitHub repo (owner/repo) or local path")
 }

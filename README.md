@@ -30,8 +30,8 @@ skills uninstall my-new-skill
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
-| `skills list [path]` | `ls` | List skills from local or remote repo |
-| `skills install <skill>...` | `i` | Install skill(s) to a target project |
+| `skills list [path]` | `ls` | List skills from local or remote source |
+| `skills install <skill>...` | `i` | Install skill(s) to a target project (use `--all` for all) |
 | `skills uninstall <skill>...` | `rm`, `remove` | Remove skill(s) from a project |
 | `skills add <name>` | `a` | Create a new skill from template |
 | `skills init [path]` | — | Initialize a project with `.agents` structure |
@@ -41,7 +41,7 @@ skills uninstall my-new-skill
 
 | Flag | Description |
 |------|-------------|
-| `-r, --repo string` | GitHub repo (owner/repo) for remote operations |
+| `-s, --source string` | Source for skills: GitHub repo (owner/repo) or local path |
 | `-h, --help` | Help for any command |
 | `-v, --version` | Show version |
 
@@ -51,12 +51,13 @@ skills uninstall my-new-skill
 
 ### `skills list` / `skills ls`
 
-List skills from the local `.agents/skills` directory. Use `--repo` to list from a remote GitHub repository.
+List skills from the local `.agents/skills` directory. Use `--source` to list from a GitHub repo or local path.
 
 ```bash
-skills ls                      # List local skills
-skills ls -r marco-souza/skills  # List from a remote repo
-skills ls ~/other-project      # List from a different project
+skills ls                           # List local skills
+skills ls --source marco-souza/skills  # List from a remote repo
+skills ls --source ~/other-project  # List from a local path
+skills ls ~/other-project           # List from a different project
 ```
 
 ### `skills add` / `skills a`
@@ -76,7 +77,7 @@ Creates:
 
 ### `skills install` / `skills i`
 
-Install one or more skills to a target project.
+Install one or more skills to a target project. Use `--all` to install every skill from the source.
 
 ```bash
 # Single skill
@@ -86,13 +87,21 @@ skills i git-commit-formatter -t ~/my-project
 skills i git-commit-formatter pr-review -t ~/my-project
 
 # From a GitHub repo
-skills i git-commit-formatter -r marco-souza/skills -t ~/my-project
+skills i git-commit-formatter --source marco-souza/skills -t ~/my-project
+
+# From a local path
+skills i git-commit-formatter --source ~/my-skills -t ~/my-project
+
+# Install all skills from the source
+skills i --all
+skills i --all -t ~/my-project
+skills i --all --source /path/to/skills-collection -t ~/my-project
 ```
 
 | Flag | Description |
 |------|-------------|
 | `-t, --target string` | Target project directory (default: current) |
-| `-r, --repo string` | GitHub repo to install from |
+| `--all` | Install all skills from the source (mutually exclusive with named args) |
 
 ### `skills uninstall` / `skills rm` / `skills remove`
 
@@ -115,15 +124,15 @@ skills uninstall git-commit-formatter pr-review -t ~/my-project
 Manage persistent CLI configuration stored at `~/.config/skills/config.yaml`.
 
 ```bash
-skills config list             # Show all settings
-skills config get default_repo # Get default repo
-skills config set default_repo my-org/skills
+skills config list                  # Show all settings
+skills config get default_source    # Get default source
+skills config set default_source my-org/skills
 skills config set default_root ~/projects
 ```
 
 | Setting | Description | Default |
 |---------|-------------|--------|
-| `default_repo` | Fallback repo when `--repo` is not set | `marco-souza/skills` |
+| `default_source` | Fallback source when `--source` is not set | `marco-souza/skills` |
 | `default_root` | Fallback root when `--root` is not set | `.` |
 
 ### `skills init`
@@ -232,17 +241,17 @@ skills/
 Persistent config lives at `~/.config/skills/config.yaml`:
 
 ```yaml
-default_repo: marco-souza/skills
+default_source: marco-souza/skills
 default_root: .
 ```
 
-These values are used as fallbacks when `--repo` or `--root` flags are not provided.
+These values are used as fallbacks when `--source` or `--root` flags are not provided.
 
 Manage via CLI:
 
 ```bash
-skills config list              # Show current settings
-skills config set default_repo my-org/skills
+skills config list                  # Show current settings
+skills config set default_source my-org/skills
 skills config set default_root ~/workspace
 ```
 

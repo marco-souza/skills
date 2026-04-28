@@ -12,45 +12,47 @@ var listCmd = &cobra.Command{
 	Use:     "list [path]",
 	Aliases: []string{"ls"},
 	Short:   "List available skills",
-	Long:    `List skills from the local .agents/skills directory or a remote GitHub repo.`,
+	Long:    `List skills from the local .agents/skills directory, a local path, or a remote GitHub repo.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root := "."
 		if len(args) > 0 {
 			root = args[0]
 		}
 
-		repo, _ := cmd.Flags().GetString("repo")
-		if repo == "" {
-			repo = cfg.DefaultRepo
+		source, _ := cmd.Flags().GetString("source")
+
+		// Try local first (no --source flag, look in .agents/skills)
+		if source == "" {
+			localDir := skills.ResolveToSkillsDir(root)
+			if _, err := os.Stat(localDir); err == nil {
+				return listSkills(root)
+			}
+			source = cfg.DefaultSource
 		}
 
-		// Try local first
-		localDir := skills.ResolveToSkillsDir(root)
-		if _, err := os.Stat(localDir); err == nil {
-			return listSkills(root)
+		if source == "" {
+			localDir := skills.ResolveToSkillsDir(root)
+			return fmt.Errorf("no local skills found at %s and no --source specified", localDir)
 		}
 
-		// Fall back to remote repo
-		if repo == "" {
-			return fmt.Errorf("no local skills found at %s and no --repo specified", localDir)
-		}
-
-		src, err := skills.ResolvePath(repo)
+		src, err := skills.ResolvePath(source)
 		if err != nil {
-			return fmt.Errorf("resolving repo %q: %w", repo, err)
-		}
-		gh, ok := src.(*skills.GitHubSource)
-		if !ok {
-			return fmt.Errorf("--repo requires a GitHub repo (owner/repo), got %s", repo)
+			return fmt.Errorf("resolving source %q: %w", source, err)
 		}
 
-		tmpDir, cleanup, err := skills.CloneRepo(gh)
-		if err != nil {
-			return err
+		switch s := src.(type) {
+		case *skills.LocalSource:
+			return listSkills(s.Path)
+		case *skills.GitHubSource:
+			tmpDir, cleanup, err := skills.CloneRepo(s)
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return listSkills(tmpDir)
+		default:
+			return fmt.Errorf("--source requires a GitHub repo (owner/repo) or local path, got %s", source)
 		}
-		defer cleanup()
-
-		return listSkills(tmpDir)
 	},
 }
 

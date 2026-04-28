@@ -12,21 +12,21 @@ import (
 
 // Default values
 const (
-	DefaultRepo = "marco-souza/skills"
-	DefaultRoot = "."
+	DefaultSource = "marco-souza/skills"
+	DefaultRoot   = "."
 )
 
 // Config holds persistent CLI settings.
 type Config struct {
-	DefaultRepo string `yaml:"default_repo"`
-	DefaultRoot string `yaml:"default_root"`
+	DefaultSource string `yaml:"default_source"`
+	DefaultRoot   string `yaml:"default_root"`
 }
 
 // Default returns a Config with factory defaults.
 func Default() *Config {
 	return &Config{
-		DefaultRepo: DefaultRepo,
-		DefaultRoot: DefaultRoot,
+		DefaultSource: DefaultSource,
+		DefaultRoot:   DefaultRoot,
 	}
 }
 
@@ -70,8 +70,8 @@ func Load() (*Config, error) {
 	}
 
 	// Apply defaults for empty fields
-	if cfg.DefaultRepo == "" {
-		cfg.DefaultRepo = DefaultRepo
+	if cfg.DefaultSource == "" {
+		cfg.DefaultSource = DefaultSource
 	}
 	if cfg.DefaultRoot == "" {
 		cfg.DefaultRoot = DefaultRoot
