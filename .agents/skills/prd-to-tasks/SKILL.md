@@ -8,8 +8,10 @@ description: >
   Do NOT use when there is no PRD or when the user wants to skip planning and start coding immediately.
 metadata:
   scripts:
-    - ../../scripts/validate-dag.py
-  runtime: python3
+    - ../../scripts/validate-dag.ts
+    - ../../scripts/generate-prompts.ts
+    - ../../scripts/status-tasks.ts
+  runtime: bun
 ---
 
 # PRD to Tasks
@@ -313,7 +315,7 @@ Run the shared DAG validator. It checks everything: valid JSON, missing dependen
 
 ```bash
 # Run from the skill directory; validates the tasks.json in cwd
-../../scripts/validate-dag.py tasks.json --summary
+bun ../../scripts/validate-dag.ts tasks.json --summary
 ```
 
 Flags:
