@@ -1,6 +1,6 @@
 # Skills CLI
 
-A lightweight Go CLI tool for managing AI agent skills — reusable skill definitions stored as `SKILL.md` files in `.agents/skills/` directories.
+A lightweight Go CLI tool for managing AI agent skills — reusable skill definitions stored as `SKILL.md` files in `.agents/skills/` directories. Skills can declare script dependencies in their frontmatter that are automatically installed alongside the skill.
 
 ## Installation
 
@@ -193,6 +193,30 @@ description: >
 [Common issues and solutions]
 ```
 
+### Script Dependencies
+
+Skills can declare external script dependencies in their frontmatter. These scripts are automatically copied to the target project's `scripts/` directory when the skill is installed. Scripts that are shared across multiple skills are only copied once (deduplication).
+
+```markdown
+---
+name: my-skill
+description: >
+  A skill that uses helper scripts.
+metadata:
+  scripts:
+    - ../../scripts/helper.ts
+    - ../../scripts/deploy.sh
+  runtime: bun
+---
+```
+
+| Metadata Field | Type | Description |
+|----------------|------|-------------|
+| `scripts` | `string[]` | Relative paths from the skill directory to script files |
+| `runtime` | `string` | Runtime hint (e.g., `bun`, `node`, `bash`) |
+
+Paths are resolved relative to the skill directory. For example, `../../scripts/helper.ts` resolves to `.agents/scripts/helper.ts` in the source project.
+
 ### Frontmatter Rules
 
 | Field | Required | Rules |
@@ -203,6 +227,7 @@ description: >
 | `category` | No | Single string (e.g., `git`, `review`, `terminal`) |
 | `author` | No | Author name |
 | `version` | No | Semver string |
+| `metadata` | No | Object with `scripts` (paths) and `runtime` fields |
 
 ---
 
