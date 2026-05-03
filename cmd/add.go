@@ -100,7 +100,7 @@ var addCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("creating SKILL.md: %w", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		title := toTitle(name)
 		data := skillTemplateData{Name: name, Title: title}

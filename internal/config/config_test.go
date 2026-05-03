@@ -46,7 +46,7 @@ func TestLoadDefaultsWhenMissing(t *testing.T) {
 	// Use a temp dir with no config file
 	testDir := t.TempDir()
 	home := filepath.Join(testDir, "home")
-	os.MkdirAll(home, 0755)
+	_ = os.MkdirAll(home, 0755)
 	t.Setenv("HOME", home)
 
 	// Force config to look in a non-existent directory
