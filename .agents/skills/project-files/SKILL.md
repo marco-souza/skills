@@ -260,7 +260,7 @@ EOF
 
 ### Delegating to Subagents
 
-When using `subagent-tmux` or `mixture-of-experts`:
+When using `spawn-subagents` or `mixture-of-experts`:
 
 ```bash
 # Read context files before spawning

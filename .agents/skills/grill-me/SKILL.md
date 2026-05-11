@@ -14,11 +14,79 @@ description: >
 > When clarification is done, hand off to another skill (e.g. `create-prd`,
 > `prd-to-tasks`) or return control to the user.
 
-Interview the user to resolve ambiguities before executing. Always attempt self-service research first. When questions remain, ask exactly **one question per turn** and wait for the answer before continuing.
+Interview the user to resolve ambiguities before executing. **Research exhaustively
+first — the agent MUST do its own homework before asking the human anything.**
+When questions remain, ask exactly **one question per turn** and wait for the
+answer before continuing.
 
 ## Core Principle
 
-> **Don't guess. Don't assume. Don't flood with questions.** Research first, then ask one thing at a time.
+> **DO YOUR JOB FIRST. Then talk to the human.**
+> Research everything you can on your own. The human's time is precious.
+> Only interrupt them when you've genuinely hit a wall.
+>
+> **Don't guess. Don't assume. Don't flood with questions.** Research first,
+> then ask one thing at a time.
+
+## ⛔ HARD GUARDRAILS (Read Before Acting)
+
+These are not suggestions. Violating any of these is a skill failure.
+
+### Guardrail 1: ALWAYS Complete Research Before Asking
+
+**You MUST exhaust ALL of these before asking the human a single question:**
+
+1. **Codebase exploration** — Read relevant files, grep for patterns, trace call stacks
+2. **Project documentation** — README, AGENTS.md, CONTRIBUTING.md, docs/
+3. **Git history** — Check commits, blame relevant files, read PR descriptions
+4. **Online research** — Web search for library docs, error messages, best practices
+5. **Browser actions** — Read docs pages, inspect API references, check issue trackers
+6. **Existing skills** — Read other skills in the project for conventions and patterns
+7. **Configuration files** — package.json, tsconfig, eslint, CI configs
+
+**Proof of research is REQUIRED.** When you ask a question, cite what you checked:
+
+```
+I've researched this:
+- Read src/auth/login.ts, src/auth/types.ts, src/auth/middleware.ts
+- Checked git log for recent auth changes (3 commits in last week)
+- Searched the codebase for "JWT" and "session" patterns
+- Read the JWT library docs on npm
+- Checked AGENTS.md for project conventions
+
+Here's what I found: [summary of discoveries]
+
+One thing I couldn't determine from research alone: [single question]
+```
+
+### Guardrail 2: NEVER Ask What You Can Answer Yourself
+
+Before asking ANY question, answer these:
+
+- Can I find this in a file in the workspace? → **READ IT. Don't ask.**
+- Can I infer this from existing code patterns? → **INFER IT. Don't ask.**
+- Can I look this up online? → **WEB SEARCH. Don't ask.**
+- Can I check the git history? → **GIT LOG. Don't ask.**
+- Can I read the library/framework docs? → **BROWSER. Don't ask.**
+
+Only after ALL of those are exhausted does a question become valid.
+
+### Guardrail 3: Show Your Work
+
+Every question MUST include a **Research Log** section showing what you did.
+Omit the research log and the question is invalid. Period.
+
+### Guardrail 4: One Question Only
+
+Never ask multiple questions at once. One. Single. Question. Wait for answer.
+Then research again (new information may answer your other questions).
+Then ask the next one.
+
+### Guardrail 5: Timebox Research, Then Decide
+
+Spend at least 2 minutes researching before asking. Spend at most 10 minutes.
+If research isn't yielding answers after 10 minutes, it's okay to ask — but
+you must show what you tried.
 
 ## When to Use
 
@@ -34,36 +102,98 @@ Interview the user to resolve ambiguities before executing. Always attempt self-
 - The ambiguity can be resolved by reading files already in the workspace
 - The answer is a well-known fact (use web search instead)
 - The user explicitly said "just do it" or "use your best judgment"
+- **You haven't done your research yet** — if you haven't exhausted codebase
+  exploration, git history, and online search, you CANNOT use this skill yet.
+  Do the research first. Then judge if questions remain.
 - **You intend to implement something.** This skill never writes code, creates files,
   or edits text. It only asks questions. Use `implement-tasks`, `prd-to-tasks`,
   or direct execution for building.
 
 ## Process
 
-### Step 1: Self-Service Research
+### Step 1: Mandatory Self-Service Research (DO NOT SKIP)
+
+**This is not optional. You MUST complete ALL applicable research categories before
+proceeding to Step 2. If you skip this, you are violating the core promise of this skill.**
 
 Before asking the human, exhaust these sources **in order**:
 
+#### 1A. Codebase Exploration (Always)
+
 ```bash
-# 1. Search the codebase
-grep -r "<keyword>" --include="*.ts" --include="*.tsx" .
+# Search for relevant patterns
+grep -rn "<keyword>" --include="*.go" --include="*.ts" --include="*.tsx" .
 rg "<pattern>" .
 
-# 2. Read relevant existing files
+# Read relevant files IN FULL (not just skimming)
 cat src/<likely-relevant-file>.ts
-ls src/<likely-relevant-dir>/
 
-# 3. Check project documentation
-cat README.md
-cat AGENTS.md
-ls docs/
+# Trace call stacks and dependencies
+grep -rn "import.*from" src/<area>/ --include="*.ts"
 
-# 4. Web search (if applicable)
-# Use your built-in web search for: library docs, error messages, best practices
+# Find where a symbol is defined and used
+grep -rn "functionName\|ClassName\|variableName" --include="*.ts" .
+
+# List the project structure
+find . -maxdepth 3 -type d | head -50
+ls -la src/
 ```
 
-**Decision point:** If ALL questions are answered by the above, the request is clear — exit
-and hand off to the appropriate skill. If ANY ambiguity remains, go to Step 2.
+#### 1B. Project Documentation (Always)
+
+```bash
+# Every project has at least some of these
+cat README.md 2>/dev/null
+cat AGENTS.md 2>/dev/null
+cat CONTRIBUTING.md 2>/dev/null
+cat CODEOWNERS 2>/dev/null
+ls docs/ 2>/dev/null
+cat package.json 2>/dev/null
+cat go.mod 2>/dev/null
+```
+
+#### 1C. Git Archaeology (When relevant)
+
+```bash
+# Recent changes to the area of interest
+git log --oneline -20 -- src/<area>/
+
+# Who last touched this file and why
+git log --oneline -5 -- src/<specific-file>
+git blame src/<specific-file> | head -30
+
+# What changed in a specific commit
+git show <commit-hash> --stat
+```
+
+#### 1D. Online Research (Browser & Web Search)
+
+```bash
+# Search for library documentation
+# Use web search for: "<library> docs", "<error message>", "<pattern> best practices"
+
+# Read official docs with browser
+# Navigate to library docs, API references, GitHub issues
+
+# Check for existing solutions
+# Search: "<problem description> <framework>"
+# Search: "<error message> site:github.com"
+```
+
+#### 1E. Existing Skills & Conventions (When in a skills project)
+
+Read other skill files in `.agents/skills/` to understand:
+- How skills reference each other (metadata.dependencies patterns)
+- Common YAML frontmatter conventions
+- Script dependency patterns (`metadata.scripts`)
+- Documentation structure and style
+
+#### Decision Point (After Exhaustive Research)
+
+After completing the research categories above:
+
+- If ALL questions are answered → Exit, hand off to appropriate skill
+- If ANY critical ambiguity remains → Go to Step 2 (but cite your research)
 
 ### Step 2: Identify the Most Critical Unknown
 
@@ -157,6 +287,11 @@ Which do you prefer?
 | Ask "What do you want?" with no options | Present concrete options with trade-offs                  |
 | Guess and hope it's right               | Spend 30 seconds asking vs hours redoing                  |
 | Keep asking when 80% clarity is enough  | Accept reasonable defaults for low-impact details         |
+| **Ask without showing research**        | **Every question MUST include a Research Log**            |
+| **Skip codebase exploration**           | **Read files, trace patterns, check git BEFORE asking**   |
+| **Ask before searching the web**        | **Browser and web search are MANDATORY research tools**   |
+| **Fire questions immediately**          | **Minimum 2 minutes of self-service research first**      |
+| **Ask about framework/library APIs**    | **Read the official docs with browser BEFORE asking**     |
 
 ## Examples
 

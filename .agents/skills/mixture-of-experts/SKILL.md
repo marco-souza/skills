@@ -1,11 +1,21 @@
 ---
 name: mixture-of-experts
 description: Solve complex problems by spawning multiple specialized expert agents that analyze from different angles, then synthesize their insights. Use for architecture decisions, code reviews, complex debugging, or when you need comprehensive analysis.
+metadata:
+  dependencies:
+    skills:
+      - spawn-subagents
+      - terminal-multiplexer
 ---
 
 # Mixture of Experts (MoE)
 
-Spawn multiple specialized experts in parallel, each analyzing from a unique angle. Aggregate their insights into a comprehensive, multi-dimensional answer.
+Spawn multiple specialized experts in parallel, each analyzing from a unique
+angle. Aggregate their insights into a comprehensive, multi-dimensional answer.
+
+> **Foundation:** This skill builds on `spawn-subagents` for the underlying
+> tmux/pi subagent mechanics. Read `spawn-subagents` for the core patterns
+> before using MoE.
 
 ## When to Use
 

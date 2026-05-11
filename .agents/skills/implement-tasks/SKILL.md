@@ -12,6 +12,11 @@ metadata:
     - ../../scripts/spawn-wave.sh
     - ../../scripts/status-tasks.ts
   runtime: bun
+  dependencies:
+    skills:
+      - spawn-subagents
+      - mixture-of-experts
+      - terminal-multiplexer
 ---
 
 # Implement Tasks (Pure Orchestrator)
@@ -20,6 +25,29 @@ This skill **never writes code itself**. It resolves the dependency graph,
 generates prompt files in `tasks/`, and spawns isolated tmux subagents that do
 the actual implementation. The orchestrator only validates, coordinates, and
 monitors — all code changes come from subagents.
+
+## ⛔ Hard Restriction: No Direct File Edits
+
+**The orchestrator agent MUST NOT directly edit, create, or delete any project
+source files.** This is a non-negotiable constraint. The orchestrator is a
+coordinator, not an implementer.
+
+### Permitted Actions
+
+- ✅ **Read files** — Read tasks.json, prompt files, subagent output, source files
+- ✅ **Browser actions** — Navigate to docs, search for solutions, read API references
+- ✅ **Run scripts** — validate-dag.ts, generate-prompts.ts, spawn-wave.sh, status-tasks.ts
+- ✅ **Run shell commands** — grep, find, git log, tmux management, cat
+- ✅ **Write orchestrator artifacts** — Status files, progress reports, handoff notes
+
+### Forbidden Actions
+
+- ❌ **Edit source files** — No edit, write, or delete on any project source files
+- ❌ **Create implementation files** — No new .ts, .js, .go, .py, etc. files
+- ❌ **Modify configuration** — No changes to package.json, tsconfig, etc.
+- ❌ **Run implementation commands** — No npm install, go build, cargo build, etc.
+
+**If implementation work is needed, spawn a subagent.** That's the whole point.
 
 ## When to Use
 
@@ -41,8 +69,9 @@ monitors — all code changes come from subagents.
 - A valid `tasks.json` file in the current working directory
 - `tmux` installed and available on PATH
 - `pi` CLI available on PATH (the subagent runner)
-- The `mixture-of-experts` skill is available (for expert definitions)
-- The `terminal-multiplexer` skill is available (for tmux session management)
+- **`spawn-subagents` skill** — Required for spawning isolated pi subagents in tmux
+- **`mixture-of-experts` skill** — Required for expert definitions and MoE delegation patterns
+- `terminal-multiplexer` skill — For tmux session management
 - Reusable scripts in `.agents/scripts/`:
   - `validate-dag.ts` — validates tasks.json structure and DAG
   - `generate-prompts.ts` — writes `tasks/TASK-XXXX-prompt` from tasks.json (auto-validates)
@@ -433,8 +462,9 @@ Last Updated: 2026-04-27 14:30
 create-prd    → Produces PRD
 prd-to-tasks  → Produces tasks.json
 implement-tasks → Executes tasks.json
+    ├── Uses: spawn-subagents (delegate work to isolated pi instances)
     ├── Uses: mixture-of-experts (expert definitions, spawn/aggregate patterns)
-    ├── Uses: terminal-multiplexer (for parallel tasks)
+    ├── Uses: terminal-multiplexer (for tmux session management)
     ├── Uses: grill-me (when blocked by ambiguity)
     └── Uses: project-files (for status tracking)
 ```

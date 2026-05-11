@@ -12,6 +12,9 @@ metadata:
     - ../../scripts/generate-prompts.ts
     - ../../scripts/status-tasks.ts
   runtime: bun
+  dependencies:
+    skills:
+      - create-prd
 ---
 
 # PRD to Tasks
@@ -83,6 +86,7 @@ Convert a PRD into a machine-readable `tasks.json` file that drives implementati
       "dependencies": [],
       "userStory": null,
       "functionalReq": "FR-1",
+      "planModel": "type-driven",
       "tags": ["setup", "types"],
       "acceptanceCriteria": [
         "Directory structure matches project conventions",
@@ -100,6 +104,7 @@ Convert a PRD into a machine-readable `tasks.json` file that drives implementati
       "dependencies": ["T001"],
       "userStory": "As a user, I want to authenticate so that I can access protected resources.",
       "functionalReq": "FR-1",
+      "planModel": "type-driven",
       "tags": ["auth", "security"],
       "acceptanceCriteria": [
         "Access tokens are generated with correct claims",
@@ -118,6 +123,7 @@ Convert a PRD into a machine-readable `tasks.json` file that drives implementati
       "dependencies": ["T002"],
       "userStory": "As a user, I want protected routes to require authentication.",
       "functionalReq": "FR-2",
+      "planModel": "review-first",
       "tags": ["auth", "middleware", "api"],
       "acceptanceCriteria": [
         "Protected routes return 401 without valid token",
@@ -144,6 +150,7 @@ Convert a PRD into a machine-readable `tasks.json` file that drives implementati
 | `moeExperts`         | string[]     | Yes      | MoE experts who review/analyze before implementation (see Expert Selection) |
 | `userStory`          | string\|null | No       | The user story this task satisfies                          |
 | `functionalReq`      | string       | No       | The FR this task maps to (e.g., "FR-1")                     |
+| `planModel`          | string       | No       | Opencode Go plan model to use for this task (see Plan Models below) |
 | `tags`               | string[]     | No       | Labels for filtering (auth, ui, api, db, test, docs, etc.)  |
 | `acceptanceCriteria` | string[]     | Yes      | Verifiable conditions that prove the task is done           |
 
@@ -309,7 +316,48 @@ The `agents` key must be validated: every task ID listed in `agents.*.tasks` mus
 appear in the `tasks` array, and every task in `tasks` must have its `agent` field
 match exactly one agent entry.
 
-### 7. Validate the File
+### 7. Assign Plan Models
+
+Each task may reference an **opencode Go plan model** — a structured approach
+for how the implementation subagent should plan and execute the task. This
+tells the subagent which planning strategy to use.
+
+#### Available Plan Models
+
+| Plan Model | Description | Best For |
+|---|---|---|
+| `explore-first` | Research and understand before changing anything | Unfamiliar code, bug investigations, architecture review |
+| `test-driven` | Write failing test first, then implement to pass | New features, algorithmic logic, well-specified behavior |
+| `refactor-safe` | Preserve behavior, improve structure incrementally | Refactoring, cleanup, tech debt reduction |
+| `type-driven` | Define types/interfaces first, then implement | New modules, API design, greenfield features |
+| `scout-then-build` | Quick exploration pass, then implement in one go | Small features, single-file changes, config updates |
+| `review-first` | Review existing code, propose changes, then implement | Legacy code, sensitive modules, high-risk changes |
+
+#### Assigning Plan Models to Tasks
+
+Choose the plan model that best fits the task's nature and risk level:
+
+| Task Type | Recommended Plan Model | Why |
+|---|---|---|
+| New feature implementation | `type-driven` or `test-driven` | Clear interface/contract first |
+| Bug fix | `explore-first` or `scout-then-build` | Understand before fixing |
+| Refactoring | `refactor-safe` | Preserve existing behavior |
+| Security-sensitive work | `review-first` | Extra caution required |
+| Simple config/script | `scout-then-build` | Low risk, fast execution |
+| Architecture change | `explore-first` + `review-first` | High impact, need thorough review |
+
+Example task with plan model:
+
+```jsonc
+{
+  "id": "T003",
+  "title": "Add auth middleware for protected routes",
+  "planModel": "type-driven",
+  // ... other fields
+}
+```
+
+### 8. Validate the File
 
 Run the shared DAG validator. It checks everything: valid JSON, missing dependencies, circular dependencies, phase keys, unique IDs, agent/moeExperts fields, and the agents summary.
 
@@ -324,7 +372,7 @@ Flags:
 
 If validation fails, the script exits with code 1 and prints a specific error. Fix the issue before proceeding.
 
-### 8. Present for Review
+### 9. Present for Review
 
 Summarize the task breakdown including agent assignments:
 
@@ -402,6 +450,7 @@ Given the Dark Mode PRD from `create-prd`:
       "moeExperts": ["maintainer", "minimalist"],
       "userStory": null,
       "functionalReq": "FR-1",
+      "planModel": "type-driven",
       "tags": ["ui", "css"],
       "acceptanceCriteria": [
         "All colors in the app are controlled by CSS custom properties",
@@ -422,6 +471,7 @@ Given the Dark Mode PRD from `create-prd`:
       "moeExperts": ["maintainer", "dx-specialist", "architect"],
       "userStory": null,
       "functionalReq": "FR-1",
+      "planModel": "type-driven",
       "tags": ["ui", "state"],
       "acceptanceCriteria": [
         "ThemeProvider wraps the app root",
@@ -442,6 +492,7 @@ Given the Dark Mode PRD from `create-prd`:
       "moeExperts": ["maintainer", "minimalist", "dx-specialist"],
       "userStory": "As a user, I want to toggle between light and dark mode so that I can reduce eye strain in low-light environments.",
       "functionalReq": "FR-1",
+      "planModel": "scout-then-build",
       "tags": ["ui"],
       "acceptanceCriteria": [
         "Toggle is visible in settings menu",
@@ -462,6 +513,7 @@ Given the Dark Mode PRD from `create-prd`:
       "moeExperts": ["maintainer", "dx-specialist"],
       "userStory": "As a user, I want the app to follow my OS color scheme by default so that I don't need to configure it manually.",
       "functionalReq": "FR-2",
+      "planModel": "explore-first",
       "tags": ["ui", "a11y"],
       "acceptanceCriteria": [
         "First visit on dark-mode OS shows dark theme",
@@ -482,6 +534,7 @@ Given the Dark Mode PRD from `create-prd`:
       "moeExperts": ["maintainer", "minimalist"],
       "userStory": "As a user, I want my preference to persist across sessions so that I don't need to re-set it.",
       "functionalReq": "FR-1",
+      "planModel": "scout-then-build",
       "tags": ["ui", "state"],
       "acceptanceCriteria": [
         "Theme choice survives page reload",
