@@ -52,7 +52,7 @@ func TestToTitleCase(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-	
+
 			got := toTitleCase(tc.input)
 			if got != tc.want {
 				t.Errorf("toTitleCase(%q) = %q, want %q", tc.input, got, tc.want)
