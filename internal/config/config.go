@@ -10,19 +10,23 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Default values
+// Default configuration values.
 const (
+	// DefaultSource is the default GitHub repository used as the skill source.
 	DefaultSource = "marco-souza/skills"
-	DefaultRoot   = "."
+	// DefaultRoot is the default project root directory.
+	DefaultRoot = "."
 )
 
-// Config holds persistent CLI settings.
+// Config holds persistent CLI settings loaded from ~/.config/skills/config.yaml.
 type Config struct {
+	// DefaultSource is the default GitHub skill source (owner/repo format).
 	DefaultSource string `yaml:"default_source"`
-	DefaultRoot   string `yaml:"default_root"`
+	// DefaultRoot is the default project root directory.
+	DefaultRoot string `yaml:"default_root"`
 }
 
-// Default returns a Config with factory defaults.
+// Default returns a new Config populated with factory default values.
 func Default() *Config {
 	return &Config{
 		DefaultSource: DefaultSource,
@@ -30,7 +34,7 @@ func Default() *Config {
 	}
 }
 
-// Dir returns the config directory path (~/.config/skills).
+// Dir returns the configuration directory path (~/.config/skills).
 func Dir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -39,7 +43,7 @@ func Dir() (string, error) {
 	return filepath.Join(home, ".config", "skills"), nil
 }
 
-// Path returns the full config file path.
+// Path returns the full path to the configuration file (~/.config/skills/config.yaml).
 func Path() (string, error) {
 	dir, err := Dir()
 	if err != nil {
@@ -48,12 +52,13 @@ func Path() (string, error) {
 	return filepath.Join(dir, "config.yaml"), nil
 }
 
-// Load reads config from disk, falling back to defaults if the file doesn't exist.
+// Load reads the configuration from disk, falling back to factory defaults if the file does not exist.
 func Load() (*Config, error) {
 	cfg := Default()
 
 	path, err := Path()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: cannot determine config path: %v\n", err)
 		return cfg, nil
 	}
 
@@ -80,7 +85,7 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// Save writes the config to disk, creating the directory if needed.
+// Save writes the configuration to disk, creating the parent directory if it does not exist.
 func (c *Config) Save() error {
 	dir, err := Dir()
 	if err != nil {

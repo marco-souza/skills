@@ -8,24 +8,29 @@ import (
 )
 
 const (
-	defaultSkillsDir = ".agents"
-	skillsSubDir     = "skills"
-	skillFileName    = "SKILL.md"
+	// DefaultSkillsDir is the default hidden directory for agent skills.
+	DefaultSkillsDir = ".agents"
+	// SkillsSubDir is the subdirectory within the skills directory that contains skill definitions.
+	SkillsSubDir = "skills"
+	// SkillFileName is the standard filename for skill definition files.
+	SkillFileName = "SKILL.md"
 )
 
 // Loader loads skills from a root project directory.
 type Loader struct {
+	// RootPath is the root directory of the project containing .agents/skills.
 	RootPath string
 }
 
-// NewLoader creates a new Loader for the given root path.
+// NewLoader returns a new Loader configured for the given root project path.
 func NewLoader(rootPath string) *Loader {
 	return &Loader{RootPath: rootPath}
 }
 
-// LoadAll loads all skills from .agents/skills under RootPath.
+// LoadAll discovers and loads all skills from the .agents/skills directory under RootPath.
+// It skips entries that are not directories or lack a SKILL.md file, logging warnings for parse failures.
 func (l *Loader) LoadAll() ([]*Skill, error) {
-	skillsDir := filepath.Join(l.RootPath, defaultSkillsDir, skillsSubDir)
+	skillsDir := filepath.Join(l.RootPath, DefaultSkillsDir, SkillsSubDir)
 
 	entries, err := os.ReadDir(skillsDir)
 	if err != nil {
@@ -41,7 +46,7 @@ func (l *Loader) LoadAll() ([]*Skill, error) {
 			continue
 		}
 
-		skillPath := filepath.Join(skillsDir, entry.Name(), skillFileName)
+		skillPath := filepath.Join(skillsDir, entry.Name(), SkillFileName)
 		if _, err := os.Stat(skillPath); os.IsNotExist(err) {
 			continue
 		}
@@ -57,8 +62,9 @@ func (l *Loader) LoadAll() ([]*Skill, error) {
 	return skills, nil
 }
 
-// ResolveToSkillsDir returns the .agents/skills directory for a given project root.
-// Always appends .agents/skills unless the input already ends with it.
+// ResolveToSkillsDir resolves an input path to the .agents/skills directory.
+// If the input is relative, it is resolved against the current working directory.
+// If the input already ends with .agents/skills, it is returned unchanged.
 func ResolveToSkillsDir(input string) string {
 	if input == "" {
 		input = "."
@@ -71,13 +77,13 @@ func ResolveToSkillsDir(input string) string {
 	}
 
 	// Already pointing at .agents/skills
-	if strings.HasSuffix(input, filepath.Join(defaultSkillsDir, skillsSubDir)) {
+	if strings.HasSuffix(input, filepath.Join(DefaultSkillsDir, SkillsSubDir)) {
 		return input
 	}
 	// Pointing at .agents — append skills
-	if strings.HasSuffix(input, defaultSkillsDir) {
-		return filepath.Join(input, skillsSubDir)
+	if strings.HasSuffix(input, DefaultSkillsDir) {
+		return filepath.Join(input, SkillsSubDir)
 	}
 	// Project root — append .agents/skills
-	return filepath.Join(input, defaultSkillsDir, skillsSubDir)
+	return filepath.Join(input, DefaultSkillsDir, SkillsSubDir)
 }

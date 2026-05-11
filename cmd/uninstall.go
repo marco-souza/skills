@@ -9,11 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	rootCmd.AddCommand(uninstallCmd)
-	uninstallCmd.Flags().StringP("target", "t", "", "Target project directory")
-}
-
 var uninstallCmd = &cobra.Command{
 	Use:     "uninstall <skill>...",
 	Aliases: []string{"rm", "remove"},
@@ -31,7 +26,10 @@ Examples:
 			return fmt.Errorf("requires at least one skill name")
 		}
 
-		targetFlag, _ := cmd.Flags().GetString("target")
+		targetFlag, err := cmd.Flags().GetString("target")
+		if err != nil {
+			return fmt.Errorf("internal error reading --target flag: %w", err)
+		}
 		target := targetFlag
 		if target == "" {
 			target = "."

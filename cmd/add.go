@@ -59,7 +59,12 @@ type skillTemplateData struct {
 	Title string
 }
 
-func toTitle(s string) string {
+// toTitleCase converts a kebab-case string to Title Case.
+// NOTE: This function is ASCII-only. It uses byte-level indexing
+// (strings.ToUpper(w[:1])) and will mangle multi-byte UTF-8 characters.
+// Replacement with golang.org/x/text/cases is deferred due to the
+// "no new deps" constraint.
+func toTitleCase(s string) string {
 	words := strings.Split(strings.ReplaceAll(s, "-", " "), " ")
 	for i, w := range words {
 		if len(w) > 0 {
@@ -69,17 +74,13 @@ func toTitle(s string) string {
 	return strings.Join(words, " ")
 }
 
-func init() {
-	rootCmd.AddCommand(addCmd)
-}
-
 var addCmd = &cobra.Command{
 	Use:     "add <name>",
 	Aliases: []string{"a"},
 	Short:   "Create a new skill from template",
 	Long:    `Create a new skill directory with a SKILL.md file from the default template.`,
 	Args:    cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		name := args[0]
 
 		skillsDir := skills.ResolveToSkillsDir(".")
@@ -100,9 +101,9 @@ var addCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("creating SKILL.md: %w", err)
 		}
-		defer func() { _ = f.Close() }()
+		defer func() { if cerr := f.Close(); cerr != nil && err == nil { err = cerr } }()
 
-		title := toTitle(name)
+		title := toTitleCase(name)
 		data := skillTemplateData{Name: name, Title: title}
 
 		if err := tmpl.Execute(f, data); err != nil {

@@ -7,13 +7,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func init() {
-	rootCmd.AddCommand(configCmd)
-	configCmd.AddCommand(configGetCmd)
-	configCmd.AddCommand(configSetCmd)
-	configCmd.AddCommand(configListCmd)
-}
-
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage persistent CLI configuration",

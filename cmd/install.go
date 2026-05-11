@@ -2,18 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/marco-souza/skills/internal/skills"
 	"github.com/spf13/cobra"
 )
-
-func init() {
-	rootCmd.AddCommand(installCmd)
-	installCmd.Flags().StringP("target", "t", "", "Target project directory")
-	installCmd.Flags().Bool("all", false, "Install all skills from the source")
-}
 
 var installCmd = &cobra.Command{
 	Use:     "install <skill>...",
@@ -35,8 +28,14 @@ Examples:
   skills i --all
   skills i --all --source /path/to/skills-collection -t ~/my-project`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		targetFlag, _ := cmd.Flags().GetString("target")
-		allFlag, _ := cmd.Flags().GetBool("all")
+		targetFlag, err := cmd.Flags().GetString("target")
+		if err != nil {
+			return fmt.Errorf("internal error reading --target flag: %w", err)
+		}
+		allFlag, err := cmd.Flags().GetBool("all")
+		if err != nil {
+			return fmt.Errorf("internal error reading --all flag: %w", err)
+		}
 
 		if allFlag && len(args) > 0 {
 			return fmt.Errorf("cannot specify skill names with --all")
@@ -45,14 +44,17 @@ Examples:
 			return fmt.Errorf("requires at least one skill name, or use --all")
 		}
 
-		source, _ := cmd.Flags().GetString("source")
+		source, err := cmd.Flags().GetString("source")
+		if err != nil {
+			return fmt.Errorf("internal error reading --source flag: %w", err)
+		}
 
 		target := targetFlag
 		if target == "" {
 			target = "."
 		}
 
-		sourceDir, cleanup, err := resolveSource(source)
+		sourceDir, cleanup, err := skills.ResolveSourceDir(source, cfg.DefaultSource)
 		if err != nil {
 			return err
 		}
@@ -71,7 +73,7 @@ Examples:
 		}()
 
 		if allFlag {
-			return installAll(installer, sourceDir, parentDir)
+			return installer.InstallAll(parentDir)
 		}
 
 		for _, name := range args {
@@ -81,73 +83,4 @@ Examples:
 		}
 		return nil
 	},
-}
-
-// resolveSource returns the directory containing skills/ and an optional cleanup function.
-// First checks local .agents/skills, then falls back to --source (local path or GitHub repo).
-func resolveSource(source string) (string, func(), error) {
-	// No explicit --source: prefer local .agents/skills, fall back to default repo
-	if source == "" {
-		localDir := skills.ResolveToSkillsDir(".")
-		if _, err := os.Stat(localDir); err == nil {
-			return ".", nil, nil
-		}
-		// No local skills, use default source (GitHub repo by default)
-		source = cfg.DefaultSource
-		if source == "" {
-			return "", nil, fmt.Errorf("no local skills found and no --source specified")
-		}
-	}
-
-	// Resolve the source: local path or GitHub repo
-	src, err := skills.ResolvePath(source)
-	if err != nil {
-		return "", nil, fmt.Errorf("resolving source %q: %w", source, err)
-	}
-
-	switch s := src.(type) {
-	case *skills.LocalSource:
-		return s.Path, nil, nil
-	case *skills.GitHubSource:
-		tmpDir, cleanup, err := skills.CloneRepo(s)
-		if err != nil {
-			return "", nil, err
-		}
-		return tmpDir, cleanup, nil
-	default:
-		return "", nil, fmt.Errorf("--source requires a GitHub repo (owner/repo) or local path, got %s", source)
-	}
-}
-
-// installAll installs every skill from the source directory to the target.
-func installAll(installer *skills.Installer, sourceDir, parentDir string) error {
-	skillsPath := filepath.Join(sourceDir, ".agents", "skills")
-	if _, err := os.Stat(skillsPath); os.IsNotExist(err) {
-		// Fall back to source root (mirrors InstallFromGitHub behavior)
-		skillsPath = sourceDir
-	}
-
-	entries, err := os.ReadDir(skillsPath)
-	if err != nil {
-		return fmt.Errorf("reading skills directory %q: %w", skillsPath, err)
-	}
-
-	count := 0
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		if err := installer.Install(entry.Name(), parentDir); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
-			continue
-		}
-		count++
-	}
-
-	if count == 0 {
-		return fmt.Errorf("no skills found in %s", skillsPath)
-	}
-
-	fmt.Printf("Installed %d skills to %s\n", count, filepath.Join(parentDir, "skills"))
-	return nil
 }

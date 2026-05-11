@@ -1,3 +1,4 @@
+// Skills CLI manages AI agent skills in local .agents/skills/ directories.
 package main
 
 import (

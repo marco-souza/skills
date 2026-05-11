@@ -1,3 +1,4 @@
+// Package skills provides types and functions for loading, validating, resolving, and installing AI agent skills.
 package skills
 
 import (
@@ -8,22 +9,32 @@ import (
 	"strings"
 )
 
-// Skill represents an AI agent skill definition.
+// Skill represents an AI agent skill definition loaded from a SKILL.md file.
 type Skill struct {
-	Name        string                 `yaml:"name"`
-	Description string                 `yaml:"description"`
-	Tags        []string               `yaml:"tags,omitempty"`
-	Category    string                 `yaml:"category,omitempty"`
-	Author      string                 `yaml:"author,omitempty"`
-	Version     string                 `yaml:"version,omitempty"`
-	Metadata    map[string]interface{} `yaml:"metadata,omitempty" json:"metadata,omitempty"`
-	Path        string                 `json:"-"`
-	Content     string                 `json:"-"`
+	// Name is the skill identifier (lowercase, hyphenated).
+	Name string `yaml:"name"`
+	// Description explains what the skill does.
+	Description string `yaml:"description"`
+	// Tags are optional labels for categorising the skill.
+	Tags []string `yaml:"tags,omitempty"`
+	// Category is an optional high-level grouping.
+	Category string `yaml:"category,omitempty"`
+	// Author is the skill's creator.
+	Author string `yaml:"author,omitempty"`
+	// Version is the skill's semantic version.
+	Version string `yaml:"version,omitempty"`
+	// Metadata holds arbitrary extra data from the frontmatter.
+	Metadata map[string]any `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	// Path is the filesystem path to the SKILL.md file.
+	Path string `json:"-"`
+	// Content is the markdown body after the frontmatter.
+	Content string `json:"-"`
 }
 
 var nameRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$|^[a-z0-9]$`)
 
-// Validate checks that the skill meets format requirements.
+// Validate checks that the skill meets the required format constraints.
+// It returns a ValidationError if the name or description is invalid.
 func (s *Skill) Validate() error {
 	var errs []string
 
@@ -45,16 +56,19 @@ func (s *Skill) Validate() error {
 	return nil
 }
 
-// ValidationError holds multiple validation errors.
+// ValidationError holds a list of validation error messages.
 type ValidationError struct {
+	// Errors is the list of individual validation failure messages.
 	Errors []string
 }
 
+// Error returns a formatted string of all validation error messages.
 func (e *ValidationError) Error() string {
 	return "validation failed:\n  - " + strings.Join(e.Errors, "\n  - ")
 }
 
-// LoadFromPath loads a skill from a SKILL.md file.
+// LoadFromPath reads and parses a SKILL.md file into the Skill struct.
+// It extracts YAML frontmatter fields and stores the remaining markdown as Content.
 func (s *Skill) LoadFromPath(path string) error {
 	s.Path = path
 
@@ -79,7 +93,7 @@ func (s *Skill) LoadFromPath(path string) error {
 	if desc, ok := frontmatter["description"].(string); ok {
 		s.Description = desc
 	}
-	if tags, ok := frontmatter["tags"].([]interface{}); ok {
+	if tags, ok := frontmatter["tags"].([]any); ok {
 		for _, t := range tags {
 			if ts, ok := t.(string); ok {
 				s.Tags = append(s.Tags, ts)
@@ -95,7 +109,7 @@ func (s *Skill) LoadFromPath(path string) error {
 	if version, ok := frontmatter["version"].(string); ok {
 		s.Version = version
 	}
-	if metadata, ok := frontmatter["metadata"].(map[string]interface{}); ok {
+	if metadata, ok := frontmatter["metadata"].(map[string]any); ok {
 		s.Metadata = metadata
 	}
 
@@ -103,13 +117,13 @@ func (s *Skill) LoadFromPath(path string) error {
 	return nil
 }
 
-// Scripts returns the list of script dependencies from metadata.scripts.
-// Returns an empty slice if metadata.scripts is absent or not a list of strings.
+// Scripts returns the list of script file paths declared in metadata.scripts.
+// It returns an empty slice if the field is absent or malformed.
 func (s *Skill) Scripts() []string {
 	if s.Metadata == nil {
 		return []string{}
 	}
-	scriptsRaw, ok := s.Metadata["scripts"].([]interface{})
+	scriptsRaw, ok := s.Metadata["scripts"].([]any)
 	if !ok {
 		return []string{}
 	}
@@ -123,7 +137,7 @@ func (s *Skill) Scripts() []string {
 }
 
 // Runtime returns the runtime identifier from metadata.runtime.
-// Returns an empty string if metadata.runtime is absent or not a string.
+// It returns an empty string if the field is absent or not a string.
 func (s *Skill) Runtime() string {
 	if s.Metadata == nil {
 		return ""
@@ -132,4 +146,27 @@ func (s *Skill) Runtime() string {
 		return runtime
 	}
 	return ""
+}
+
+// Dependencies returns the list of skill names from metadata.dependencies.skills.
+// It returns nil if the dependencies section is absent or malformed.
+func (s *Skill) Dependencies() []string {
+	if s.Metadata == nil {
+		return nil
+	}
+	depsRaw, ok := s.Metadata["dependencies"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	skillsRaw, ok := depsRaw["skills"].([]any)
+	if !ok {
+		return nil
+	}
+	deps := make([]string, 0, len(skillsRaw))
+	for _, item := range skillsRaw {
+		if name, ok := item.(string); ok {
+			deps = append(deps, name)
+		}
+	}
+	return deps
 }

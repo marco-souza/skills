@@ -7,9 +7,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ParseFrontmatter extracts YAML frontmatter from markdown content.
-// Returns the parsed YAML map, the remaining body, and any error.
-func ParseFrontmatter(content string) (map[string]interface{}, string, error) {
+// ParseFrontmatter extracts YAML frontmatter from a markdown string.
+// It returns the parsed frontmatter map, the remaining body content, and an error if parsing fails.
+func ParseFrontmatter(content string) (map[string]any, string, error) {
 	content = strings.TrimSpace(content)
 
 	if !strings.HasPrefix(content, "---") {
@@ -24,7 +24,7 @@ func ParseFrontmatter(content string) (map[string]interface{}, string, error) {
 	yamlContent := strings.TrimSpace(parts[0])
 	body := strings.TrimSpace(parts[1])
 
-	var fm map[string]interface{}
+	var fm map[string]any
 	if err := yaml.Unmarshal([]byte(yamlContent), &fm); err != nil {
 		return nil, body, fmt.Errorf("invalid YAML: %w", err)
 	}

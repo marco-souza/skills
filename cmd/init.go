@@ -33,10 +33,6 @@ skills uninstall my-skill # Remove a skill
 %s
 `
 
-func init() {
-	rootCmd.AddCommand(initCmd)
-}
-
 var initCmd = &cobra.Command{
 	Use:   "init [path]",
 	Short: "Initialize a project with .agents structure",
