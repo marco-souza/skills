@@ -74,43 +74,51 @@ func toTitleCase(s string) string {
 	return strings.Join(words, " ")
 }
 
-var addCmd = &cobra.Command{
-	Use:     "add <name>",
-	Aliases: []string{"a"},
-	Short:   "Create a new skill from template",
-	Long:    `Create a new skill directory with a SKILL.md file from the default template.`,
-	Args:    cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) (err error) {
-		name := args[0]
+var addCmd = newAddCmd()
 
-		skillsDir := skills.ResolveToSkillsDir(".")
-		skillPath := filepath.Join(skillsDir, name)
-		skillFile := filepath.Join(skillPath, "SKILL.md")
+func newAddCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "add <name>",
+		Aliases: []string{"a"},
+		Short:   "Create a new skill from template",
+		Long:    `Create a new skill directory with a SKILL.md file from the default template.`,
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			name := args[0]
 
-		if _, err := os.Stat(skillFile); err == nil {
-			return fmt.Errorf("skill %q already exists at %s", name, skillFile)
-		}
+			skillsDir := skills.ResolveToSkillsDir(".")
+			skillPath := filepath.Join(skillsDir, name)
+			skillFile := filepath.Join(skillPath, "SKILL.md")
 
-		if err := os.MkdirAll(skillPath, 0755); err != nil {
-			return fmt.Errorf("creating skill directory: %w", err)
-		}
+			if _, err := os.Stat(skillFile); err == nil {
+				return fmt.Errorf("skill %q already exists at %s", name, skillFile)
+			}
 
-		tmpl := template.Must(template.New("skill").Parse(defaultSkillTemplate))
+			if err := os.MkdirAll(skillPath, 0755); err != nil {
+				return fmt.Errorf("creating skill directory: %w", err)
+			}
 
-		f, err := os.Create(skillFile)
-		if err != nil {
-			return fmt.Errorf("creating SKILL.md: %w", err)
-		}
-		defer func() { if cerr := f.Close(); cerr != nil && err == nil { err = cerr } }()
+			tmpl := template.Must(template.New("skill").Parse(defaultSkillTemplate))
 
-		title := toTitleCase(name)
-		data := skillTemplateData{Name: name, Title: title}
+			f, err := os.Create(skillFile)
+			if err != nil {
+				return fmt.Errorf("creating SKILL.md: %w", err)
+			}
+			defer func() {
+				if cerr := f.Close(); cerr != nil && err == nil {
+					err = cerr
+				}
+			}()
 
-		if err := tmpl.Execute(f, data); err != nil {
-			return fmt.Errorf("rendering template: %w", err)
-		}
+			title := toTitleCase(name)
+			data := skillTemplateData{Name: name, Title: title}
 
-		fmt.Printf("Created skill %q at %s\n", name, skillFile)
-		return nil
-	},
+			if err := tmpl.Execute(f, data); err != nil {
+				return fmt.Errorf("rendering template: %w", err)
+			}
+
+			fmt.Printf("Created skill %q at %s\n", name, skillFile)
+			return nil
+		},
+	}
 }

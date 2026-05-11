@@ -109,7 +109,8 @@ func resolveGitHub(input string) *GitHubSource {
 //
 // If the resolved source is a GitHub repo, it is cloned to a temp dir
 // and the cleanup function removes it when called.
-func ResolveSourceDir(source string, defaultSource string) (string, func(), error) {
+// execFn is the function used to spawn the git clone command; if nil, exec.Command is used.
+func ResolveSourceDir(source string, defaultSource string, execFn ExecFunc) (string, func(), error) {
 	// No explicit source: prefer local .agents/skills
 	if source == "" {
 		localDir := ResolveToSkillsDir(".")
@@ -134,7 +135,7 @@ func ResolveSourceDir(source string, defaultSource string) (string, func(), erro
 		return src.Local.Path, nil, nil
 	}
 	if src.GitHub != nil {
-		tmpDir, cleanup, err := CloneRepo(src.GitHub)
+		tmpDir, cleanup, err := CloneRepo(src.GitHub, execFn)
 		if err != nil {
 			return "", nil, err
 		}

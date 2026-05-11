@@ -12,6 +12,9 @@ import (
 type Installer struct {
 	// SourceDir is the directory containing the source skills. If empty, the current directory is used.
 	SourceDir string
+	// ExecCommand is the function used to spawn external commands (e.g., git clone).
+	// If nil, exec.Command is used.
+	ExecCommand ExecFunc
 }
 
 func (i *Installer) sourceDir() string {
@@ -80,7 +83,7 @@ func (i *Installer) installWithTracking(skillName, parentDir string, installed m
 // InstallFromGitHub clones a GitHub repository and installs every skill it contains into the target project.
 // The parentDir argument specifies the directory that contains the skills/ subdirectory.
 func (i *Installer) InstallFromGitHub(src *GitHubSource, parentDir string) error {
-	repoDir, cleanup, err := CloneRepo(src)
+	repoDir, cleanup, err := CloneRepo(src, i.ExecCommand)
 	if err != nil {
 		return err
 	}

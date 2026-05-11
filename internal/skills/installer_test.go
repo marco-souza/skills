@@ -197,18 +197,9 @@ func TestInstaller_InstallFromGitHub(t *testing.T) {
 
 	t.Run("uses mocked exec to simulate clone", func(t *testing.T) {
 		t.Parallel()
-		// Save original and restore
-		origExec := execCommand
-		defer func() { execCommand = origExec }()
 
 		// Create a local bare repo to clone from
 		bareRepo := createBareRepo(t)
-
-		execCommand = func(name string, args ...string) *exec.Cmd {
-			// Override the git clone args to use local file:// URL
-			cmd := exec.Command(name, args...)
-			return cmd
-		}
 
 		// We can't fully mock git clone without a real repo accessible via SSH,
 		// so test with a file:// URL by constructing a fake GitHubSource
@@ -221,18 +212,7 @@ func TestInstaller_InstallFromGitHub(t *testing.T) {
 			SSHURL: bareRepo, // local bare repo path acts as clone source
 		}
 
-		// Create an Installer and test InstallFromGitHub flow
-		// The SSHURL will be used as the clone source via `git clone --depth 1 <SSHURL> <repoDir>`
-		// For a local bare repo, `git clone <bare_repo_path> <dest>` works fine.
-
-		// Since InstallFromGitHub clones into tmpDir + "/" + gh.Repo, we can't
-		// easily inject without deeper refactoring. Instead, test CloneRepo
-		// with bare repo (in remote_test.go) and test InstallFromGitHub
-		// with a real local git repo scenario.
-
-		// For now, test InstallFromGitHub with the local bare repo by
-		// monkey-patching execCommand to replace SSHURL with the bare repo path.
-		execCommand = func(name string, args ...string) *exec.Cmd {
+		mockExec := func(name string, args ...string) *exec.Cmd {
 			newArgs := make([]string, len(args))
 			copy(newArgs, args)
 			// Replace the SSHURL (5th arg) with the bare repo path
@@ -241,11 +221,10 @@ func TestInstaller_InstallFromGitHub(t *testing.T) {
 					newArgs[i] = bareRepo
 				}
 			}
-			cmd := exec.Command(name, newArgs...)
-			return cmd
+			return exec.Command(name, newArgs...)
 		}
 
-		installer := &Installer{}
+		installer := &Installer{ExecCommand: mockExec}
 		target := t.TempDir()
 		parentDir := filepath.Join(target, DefaultSkillsDir)
 

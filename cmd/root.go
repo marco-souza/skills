@@ -6,15 +6,17 @@ import (
 	"os"
 
 	"github.com/marco-souza/skills/internal/config"
+	"github.com/marco-souza/skills/internal/skills"
 	"github.com/spf13/cobra"
 )
 
 var (
-	version = "dev"
-	commit  = "unknown"
-	date    = "unknown"
-	cfg     *config.Config
-	err     error
+	version         = "dev"
+	commit          = "unknown"
+	date            = "unknown"
+	cfg             *config.Config
+	err             error
+	defaultExecFunc skills.ExecFunc // injectable for tests; nil means exec.Command
 )
 
 var rootCmd = &cobra.Command{
@@ -38,8 +40,6 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringP("source", "s", "", "Source for skills: GitHub repo (owner/repo) or local path")
-
 	// Register subcommands
 	rootCmd.AddCommand(addCmd)
 	rootCmd.AddCommand(initCmd)
@@ -47,11 +47,6 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(uninstallCmd)
 	rootCmd.AddCommand(configCmd)
-
-	// Register subcommand flags
-	installCmd.Flags().StringP("target", "t", "", "Target project directory")
-	installCmd.Flags().Bool("all", false, "Install all skills from the source")
-	uninstallCmd.Flags().StringP("target", "t", "", "Target project directory")
 
 	// Register config subcommands
 	configCmd.AddCommand(configGetCmd)

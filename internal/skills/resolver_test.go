@@ -22,7 +22,7 @@ func TestResolveSourceDir(t *testing.T) {
 		_ = os.Chdir(dir)
 		defer os.Chdir(cwd)
 
-		result, cleanup, err := ResolveSourceDir("", "")
+		result, cleanup, err := ResolveSourceDir("", "", nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -41,7 +41,7 @@ func TestResolveSourceDir(t *testing.T) {
 		_ = os.Chdir(dir)
 		defer os.Chdir(cwd)
 
-		_, _, err := ResolveSourceDir("", "")
+		_, _, err := ResolveSourceDir("", "", nil)
 		if err == nil {
 			t.Fatal("expected error when no local skills and no default source")
 		}
@@ -56,7 +56,7 @@ func TestResolveSourceDir(t *testing.T) {
 
 		// Use a local path as default source
 		defaultSrc := "/some/local/path"
-		result, cleanup, err := ResolveSourceDir("", defaultSrc)
+		result, cleanup, err := ResolveSourceDir("", defaultSrc, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -71,7 +71,7 @@ func TestResolveSourceDir(t *testing.T) {
 	t.Run("non-empty local source", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		result, cleanup, err := ResolveSourceDir(dir, "")
+		result, cleanup, err := ResolveSourceDir(dir, "", nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -94,7 +94,7 @@ func TestResolveSourceDir(t *testing.T) {
 		subDir := "subdir"
 		os.MkdirAll(subDir, 0755)
 
-		result, cleanup, err := ResolveSourceDir(subDir, "")
+		result, cleanup, err := ResolveSourceDir(subDir, "", nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -111,12 +111,10 @@ func TestResolveSourceDir(t *testing.T) {
 
 	t.Run("github source clones repo", func(t *testing.T) {
 		t.Parallel()
-		origExec := execCommand
-		defer func() { execCommand = origExec }()
 
 		bareRepo := createBareRepoForResolver(t)
 
-		execCommand = func(name string, args ...string) *exec.Cmd {
+		mockExec := func(name string, args ...string) *exec.Cmd {
 			newArgs := make([]string, len(args))
 			copy(newArgs, args)
 			for i := range newArgs {
@@ -128,7 +126,7 @@ func TestResolveSourceDir(t *testing.T) {
 		}
 
 		// Use a GitHub shorthand as source
-		result, cleanup, err := ResolveSourceDir("resolver-test/repo", "")
+		result, cleanup, err := ResolveSourceDir("resolver-test/repo", "", mockExec)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -143,7 +141,7 @@ func TestResolveSourceDir(t *testing.T) {
 		}
 
 		// The cloned repo should contain our test skill
-		skillPath := filepath.Join(result, "repo", DefaultSkillsDir, SkillsSubDir, "resolver-skill", SkillFileName)
+		skillPath := filepath.Join(result, DefaultSkillsDir, SkillsSubDir, "resolver-skill", SkillFileName)
 		if _, err := os.Stat(skillPath); os.IsNotExist(err) {
 			t.Fatalf("expected SKILL.md at %s", skillPath)
 		}
@@ -151,14 +149,12 @@ func TestResolveSourceDir(t *testing.T) {
 
 	t.Run("github source with clone failure", func(t *testing.T) {
 		t.Parallel()
-		origExec := execCommand
-		defer func() { execCommand = origExec }()
 
-		execCommand = func(name string, args ...string) *exec.Cmd {
+		mockExec := func(name string, args ...string) *exec.Cmd {
 			return exec.Command("false")
 		}
 
-		_, _, err := ResolveSourceDir("fail-test/fail-repo", "")
+		_, _, err := ResolveSourceDir("fail-test/fail-repo", "", mockExec)
 		if err == nil {
 			t.Fatal("expected error from failed clone")
 		}
@@ -172,7 +168,7 @@ func TestResolveSourceDir(t *testing.T) {
 		defer os.Chdir(cwd)
 
 		// Empty input with no local and no default should error
-		_, _, err := ResolveSourceDir("", "")
+		_, _, err := ResolveSourceDir("", "", nil)
 		if err == nil {
 			t.Fatal("expected error")
 		}
