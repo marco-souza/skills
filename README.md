@@ -245,12 +245,11 @@ skills/
 │   └── config.go
 ├── internal/
 │   ├── skills/               # Core logic
-│   │   ├── skill.go
+│   │   ├── skill.go          # Skill type, validation, and frontmatter parsing
 │   │   ├── loader.go
 │   │   ├── installer.go
 │   │   ├── resolver.go
-│   │   ├── remote.go
-│   │   └── frontmatter.go
+│   │   └── remote.go
 │   └── config/               # Persistent CLI config
 │       └── config.go
 ├── main.go

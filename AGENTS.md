@@ -4,41 +4,66 @@ This document provides guidelines for AI agents working in this repository.
 
 ## Repository Overview
 
-This is a **Skills Repository** - a collection of reusable AI agent skill definitions stored as Markdown files. Each skill provides specialized instructions that can be loaded by AI assistants to enhance their capabilities in specific domains.
+This is the **Skills CLI** repository — a Go CLI tool (`skills`) for managing AI agent skill definitions stored as `SKILL.md` files in `.agents/skills/` directories. The repo also ships the canonical collection of reusable skills that agents can install into any project.
 
 **Key Characteristics:**
 
-- Documentation-only repository (no executable code)
-- No build, test, or lint commands
-- Skills are self-contained Markdown files with YAML frontmatter
+- Go CLI (`github.com/marco-souza/skills`) built with Cobra
+- Skill definitions live in `.agents/skills/` as Markdown files with YAML frontmatter
 - Follows the [Agent Skills standard](https://agentskills.io/specification)
+- Tests, linting, and builds are all available via standard Go tooling
 
 ## Repository Structure
 
 ```
 skills/
-├── AGENTS.md                       # This file - agent guidelines
-├── PLAN.md                         # Skill improvement plans
-└── .agents/
-    └── skills/                     # Agent Skills standard directory
-        ├── git-commit-formatter/   # Git commit message formatting skill
-        │   └── SKILL.md
-        ├── pr-review/              # Pull request review skill
-        │   └── SKILL.md
-        └── terminal-multiplexer/   # Tmux terminal multiplexer skill
-            └── SKILL.md
+├── AGENTS.md                        # This file — agent guidelines
+├── README.md                        # User-facing documentation
+├── PRD.md                           # Product requirements document
+├── main.go                          # CLI entry point
+├── go.mod / go.sum                  # Go module files
+├── cmd/                             # Cobra CLI commands
+│   ├── root.go
+│   ├── list.go
+│   ├── add.go
+│   ├── install.go
+│   ├── uninstall.go
+│   ├── init.go
+│   └── config.go
+├── internal/
+│   ├── skills/                      # Core skill logic
+│   │   ├── skill.go                 # Skill type, validation, frontmatter parsing
+│   │   ├── loader.go                # Discovers/loads skills from disk
+│   │   ├── installer.go             # Copies skills to target projects
+│   │   ├── resolver.go              # Resolves source directories
+│   │   └── remote.go               # GitHub clone support
+│   └── config/                      # Persistent CLI config (~/.config/skills/)
+│       └── config.go
+├── testdata/                        # Test fixtures
+└── .agents/skills/                  # Canonical skill definitions shipped with this repo
+    ├── brainstorm/
+    ├── create-prd/
+    ├── explore/
+    ├── git-commit-formatter/
+    ├── grill-me/
+    ├── implement-tasks/
+    ├── markdown-format/
+    ├── mixture-of-experts/
+    ├── pr-review/
+    ├── prd-to-tasks/
+    ├── project-files/
+    ├── spawn-subagents/
+    └── terminal-multiplexer/
 ```
 
 ## Build/Lint/Test Commands
 
-**None required.** This repository contains only Markdown documentation files.
-
-For validation, you can:
-
-- Verify YAML frontmatter syntax is valid
-- Check Markdown formatting with any Markdown linter
-- Ensure all skill directories contain a `SKILL.md` file
-- Run `pi` to validate skills against the Agent Skills standard
+```bash
+go build -o skills .     # Build the CLI binary
+go test ./...            # Run all tests
+go vet ./...             # Static analysis / lint
+go install .             # Install the binary locally
+```
 
 ## File Format: SKILL.md
 
@@ -222,7 +247,6 @@ oth: update AGENTS.md with new guidelines
 - Update the `description` in frontmatter if the skill's purpose changes
 - Keep changes focused and atomic
 - Test that YAML frontmatter remains valid after edits
-- Update PLAN.md if significant changes are planned
 
 ## Common Patterns in This Repository
 
