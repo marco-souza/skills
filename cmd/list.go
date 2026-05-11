@@ -22,7 +22,7 @@ func newListCmd() *cobra.Command {
 				return fmt.Errorf("internal error reading --source flag: %w", err)
 			}
 
-			sourceDir, cleanup, err := skills.ResolveSourceDir(source, cfg.DefaultSource, defaultExecFunc)
+			sourceDir, cleanup, err := skills.ResolveSourceDir(source, cfg.DefaultSource)
 			if err != nil {
 				return err
 			}

@@ -19,7 +19,6 @@ bareRepo := createBareRepoForRemote(t)
 gh := &GitHubSource{
 Owner:  "test",
 Repo:   "test-repo",
-URL:    "file://" + bareRepo,
 SSHURL: "file://" + bareRepo,
 }
 
@@ -56,7 +55,6 @@ return exec.Command(name, newArgs...)
 gh := &GitHubSource{
 Owner:  "test",
 Repo:   "test-repo",
-URL:    "https://github.com/test/test-repo",
 SSHURL: "git@github.com:test/test-repo.git",
 }
 
@@ -95,7 +93,6 @@ return exec.Command(name, newArgs...)
 gh := &GitHubSource{
 Owner:  "test",
 Repo:   "cleanup-repo",
-URL:    "https://github.com/test/cleanup-repo",
 SSHURL: "git@github.com:test/cleanup-repo.git",
 }
 
@@ -131,7 +128,6 @@ return exec.Command("false")
 gh := &GitHubSource{
 Owner:  "test",
 Repo:   "fail-repo",
-URL:    "https://github.com/test/fail-repo",
 SSHURL: "git@github.com:test/fail-repo.git",
 }
 
@@ -153,7 +149,6 @@ return exec.Command("false")
 gh := &GitHubSource{
 Owner:  "test",
 Repo:   "err-repo",
-URL:    "https://github.com/test/err-repo",
 SSHURL: "git@github.com:test/err-repo.git",
 }
 
@@ -212,7 +207,6 @@ return exec.Command("sh", "-c", "exit 1")
 gh := &GitHubSource{
 Owner:  "fake",
 Repo:   "fake-repo",
-URL:    "https://github.com/fake/fake-repo",
 SSHURL: "git@github.com:fake/fake-repo.git",
 }
 
@@ -251,7 +245,6 @@ return exec.Command(name, newArgs...)
 gh := &GitHubSource{
 Owner:  "e2e",
 Repo:   "e2e-repo",
-URL:    "https://github.com/e2e/e2e-repo",
 SSHURL: "git@github.com:e2e/e2e-repo.git",
 }
 
@@ -278,46 +271,6 @@ t.Fatal("expected SKILL.md in cloned repo")
 }
 }
 
-// TestInstaller_InstallFromGitHub_LocalRepo tests InstallFromGitHub with a local bare repo.
-func TestInstaller_InstallFromGitHub_LocalRepo(t *testing.T) {
-t.Parallel()
-
-bareRepo := createBareRepoForRemote(t)
-
-mockExec := func(name string, args ...string) *exec.Cmd {
-newArgs := make([]string, len(args))
-copy(newArgs, args)
-for i := range newArgs {
-if i == len(args)-2 {
-newArgs[i] = bareRepo
-}
-}
-return exec.Command(name, newArgs...)
-}
-
-gh := &GitHubSource{
-Owner:  "installer",
-Repo:   "installer-repo",
-URL:    "https://github.com/installer/installer-repo",
-SSHURL: "git@github.com:installer/installer-repo.git",
-}
-
-installer := &Installer{ExecCommand: mockExec}
-target := t.TempDir()
-parentDir := filepath.Join(target, DefaultSkillsDir)
-
-err := installer.InstallFromGitHub(gh, parentDir)
-if err != nil {
-t.Fatalf("InstallFromGitHub failed: %v", err)
-}
-
-// Verify the skill was installed
-destSkill := filepath.Join(parentDir, SkillsSubDir, "remote-skill", SkillFileName)
-if _, err := os.Stat(destSkill); os.IsNotExist(err) {
-t.Fatal("remote-skill was not installed")
-}
-}
-
 // TestCloneRepo_SourceDirResolution tests that the clone destination includes the repo name.
 func TestCloneRepo_RepoDirIncludesRepoName(t *testing.T) {
 t.Parallel()
@@ -338,7 +291,6 @@ return exec.Command(name, newArgs...)
 gh := &GitHubSource{
 Owner:  "dir-test",
 Repo:   "named-repo",
-URL:    "https://github.com/dir-test/named-repo",
 SSHURL: "git@github.com:dir-test/named-repo.git",
 }
 

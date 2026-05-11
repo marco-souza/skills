@@ -6,17 +6,15 @@ import (
 	"os"
 
 	"github.com/marco-souza/skills/internal/config"
-	"github.com/marco-souza/skills/internal/skills"
 	"github.com/spf13/cobra"
 )
 
 var (
-	version         = "dev"
-	commit          = "unknown"
-	date            = "unknown"
-	cfg             *config.Config
-	err             error
-	defaultExecFunc skills.ExecFunc // injectable for tests; nil means exec.Command
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+	cfg     *config.Config
+	err     error
 )
 
 var rootCmd = &cobra.Command{

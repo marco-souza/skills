@@ -57,7 +57,7 @@ Examples:
 				target = "."
 			}
 
-			sourceDir, cleanup, err := skills.ResolveSourceDir(source, cfg.DefaultSource, defaultExecFunc)
+			sourceDir, cleanup, err := skills.ResolveSourceDir(source, cfg.DefaultSource)
 			if err != nil {
 				return err
 			}
@@ -65,7 +65,7 @@ Examples:
 				defer cleanup()
 			}
 
-			installer := &skills.Installer{SourceDir: sourceDir, ExecCommand: defaultExecFunc}
+			installer := &skills.Installer{SourceDir: sourceDir}
 
 			// Helper to determine parent dir
 			parentDir := filepath.Join(target, ".agents")

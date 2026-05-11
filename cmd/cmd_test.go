@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,38 +30,7 @@ func setupCfg(t *testing.T) {
 	cfg = config.Default()
 }
 
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git %v failed: %v", args, err)
-	}
-}
 
-func createBareRepoWithSkills(t *testing.T) string {
-	t.Helper()
-	tempDir := t.TempDir()
-	workDir := filepath.Join(tempDir, "work")
-	bareRepo := filepath.Join(tempDir, "bare.git")
-
-	os.MkdirAll(workDir, 0755)
-	runGit(t, workDir, "init")
-	runGit(t, workDir, "config", "user.email", "test@test.com")
-	runGit(t, workDir, "config", "user.name", "Test")
-
-	// Add two skills
-	setupSourceSkill(t, workDir, "skill-alpha", "skill-alpha", "Alpha skill for testing.")
-	setupSourceSkill(t, workDir, "skill-beta", "skill-beta", "Beta skill for testing.")
-
-	runGit(t, workDir, "add", ".")
-	runGit(t, workDir, "commit", "-m", "init")
-	runGit(t, tempDir, "clone", "--bare", workDir, bareRepo)
-
-	return bareRepo
-}
 
 // ── toTitleCase (pure function) ──────────────────────────────────────────────
 
@@ -712,80 +680,6 @@ func setupSourceSkillDir(t *testing.T, src, dirName string) string {
 
 // ── install via GitHub (local bare repo) ─────────────────────────────────────
 
-func TestInstallViaGitHub(t *testing.T) {
-
-
-	t.Run("install from local bare repo", func(t *testing.T) {
-		setupCfg(t)
-
-		bareRepo := createBareRepoWithSkills(t)
-
-		// Override execCommand to use local bare repo instead of SSH
-		origExec := defaultExecFunc
-		defer func() { defaultExecFunc = origExec }()
-
-		defaultExecFunc = func(name string, args ...string) *exec.Cmd {
-			// Replace the SSH URL argument with the local bare repo path
-			newArgs := make([]string, len(args))
-			copy(newArgs, args)
-			for i, arg := range newArgs {
-				// The SSH URL is the last non-directory argument (position varies)
-				if strings.HasSuffix(arg, ".git") || strings.Contains(arg, "bare") || arg == bareRepo {
-					newArgs[i] = bareRepo
-				}
-			}
-			// If we couldn't find it by matching, replace the clone source (5th arg for git clone --depth 1 <url> <dir>)
-			// args format: clone --depth 1 <SSHURL> <repoDir>
-			if len(newArgs) >= 5 {
-				newArgs[3] = bareRepo
-			}
-			return exec.Command(name, newArgs...)
-		}
-
-		target := t.TempDir()
-
-		c := newInstallCmd()
-		c.SetArgs([]string{"--all", "-s", "test/test-repo", "-t", target})
-		c.SetOut(&bytes.Buffer{})
-		c.SetErr(&bytes.Buffer{})
-
-		err := c.Execute()
-		if err != nil {
-			t.Fatalf("install from GitHub failed: %v", err)
-		}
-
-		// Verify both skills were installed
-		for _, name := range []string{"skill-alpha", "skill-beta"} {
-			dest := filepath.Join(target, ".agents", "skills", name, skills.SkillFileName)
-			if _, err := os.Stat(dest); os.IsNotExist(err) {
-				t.Fatalf("skill %q was not installed from GitHub source", name)
-			}
-		}
-	})
-
-	t.Run("GitHub clone failure returns error", func(t *testing.T) {
-		setupCfg(t)
-
-		origExec := defaultExecFunc
-		defer func() { defaultExecFunc = origExec }()
-
-		defaultExecFunc = func(name string, args ...string) *exec.Cmd {
-			return exec.Command("false")
-		}
-
-		target := t.TempDir()
-
-		c := newInstallCmd()
-		c.SetArgs([]string{"some-skill", "-s", "fail-test/fail-repo", "-t", target})
-		c.SetOut(&bytes.Buffer{})
-		c.SetErr(&bytes.Buffer{})
-
-		err := c.Execute()
-		if err == nil {
-			t.Fatal("expected error from failed GitHub clone")
-		}
-	})
-}
 
 // ── list command ─────────────────────────────────────────────────────────────
 

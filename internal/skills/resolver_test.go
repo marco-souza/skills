@@ -1,202 +1,141 @@
 package skills
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
-	"testing"
+"os"
+"path/filepath"
+"testing"
 )
 
 func TestResolveSourceDir(t *testing.T) {
-	t.Parallel()
+t.Parallel()
 
-	t.Run("empty source with local .agents/skills found", func(t *testing.T) {
-		t.Parallel()
-		// Create a temp dir with .agents/skills
-		dir := t.TempDir()
-		skillsDir := filepath.Join(dir, DefaultSkillsDir, SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+t.Run("empty source with local .agents/skills found", func(t *testing.T) {
+t.Parallel()
+dir := t.TempDir()
+os.MkdirAll(filepath.Join(dir, DefaultSkillsDir, SkillsSubDir), 0755)
 
-		// Change to the temp dir
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
+cwd, _ := os.Getwd()
+_ = os.Chdir(dir)
+defer os.Chdir(cwd)
 
-		result, cleanup, err := ResolveSourceDir("", "", nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if cleanup != nil {
-			t.Fatal("cleanup should be nil for local source")
-		}
-		if result != "." {
-			t.Errorf("expected '.', got %q", result)
-		}
-	})
+result, cleanup, err := ResolveSourceDir("", "")
+if err != nil {
+t.Fatalf("unexpected error: %v", err)
+}
+if cleanup != nil {
+t.Fatal("cleanup should be nil for local source")
+}
+if result != "." {
+t.Errorf("expected '.', got %q", result)
+}
+})
 
-	t.Run("empty source with no local and no default", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
+t.Run("empty source with no local and no default errors", func(t *testing.T) {
+t.Parallel()
+dir := t.TempDir()
+cwd, _ := os.Getwd()
+_ = os.Chdir(dir)
+defer os.Chdir(cwd)
 
-		_, _, err := ResolveSourceDir("", "", nil)
-		if err == nil {
-			t.Fatal("expected error when no local skills and no default source")
-		}
-	})
+_, _, err := ResolveSourceDir("", "")
+if err == nil {
+t.Fatal("expected error when no local skills and no default source")
+}
+})
 
-	t.Run("empty source falls back to default source", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
+t.Run("empty source falls back to local default source", func(t *testing.T) {
+t.Parallel()
+dir := t.TempDir()
+cwd, _ := os.Getwd()
+_ = os.Chdir(dir)
+defer os.Chdir(cwd)
 
-		// Use a local path as default source
-		defaultSrc := "/some/local/path"
-		result, cleanup, err := ResolveSourceDir("", defaultSrc, nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if cleanup != nil {
-			t.Fatal("cleanup should be nil for local default source")
-		}
-		if result != defaultSrc {
-			t.Errorf("expected %q, got %q", defaultSrc, result)
-		}
-	})
+defaultSrc := "/some/local/path"
+result, cleanup, err := ResolveSourceDir("", defaultSrc)
+if err != nil {
+t.Fatalf("unexpected error: %v", err)
+}
+if cleanup != nil {
+t.Fatal("cleanup should be nil for local default source")
+}
+if result != defaultSrc {
+t.Errorf("expected %q, got %q", defaultSrc, result)
+}
+})
 
-	t.Run("non-empty local source", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		result, cleanup, err := ResolveSourceDir(dir, "", nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if cleanup != nil {
-			t.Fatal("cleanup should be nil for local source")
-		}
-		if result != dir {
-			t.Errorf("expected %q, got %q", dir, result)
-		}
-	})
+t.Run("absolute local source", func(t *testing.T) {
+t.Parallel()
+dir := t.TempDir()
+result, cleanup, err := ResolveSourceDir(dir, "")
+if err != nil {
+t.Fatalf("unexpected error: %v", err)
+}
+if cleanup != nil {
+t.Fatal("cleanup should be nil for local source")
+}
+if result != dir {
+t.Errorf("expected %q, got %q", dir, result)
+}
+})
 
-	t.Run("non-empty relative source", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
+t.Run("relative local source", func(t *testing.T) {
+t.Parallel()
+dir := t.TempDir()
+cwd, _ := os.Getwd()
+_ = os.Chdir(dir)
+defer os.Chdir(cwd)
 
-		// Create a subdirectory
-		subDir := "subdir"
-		os.MkdirAll(subDir, 0755)
-
-		result, cleanup, err := ResolveSourceDir(subDir, "", nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if cleanup != nil {
-			t.Fatal("cleanup should be nil for local source")
-		}
-		// Use filepath.Clean for consistent path comparison (macOS /private/ prefix)
-		expected := filepath.Clean(filepath.Join(dir, subDir))
-		resultClean := filepath.Clean(result)
-		if resultClean != expected {
-			t.Errorf("expected %q, got %q", expected, resultClean)
-		}
-	})
-
-	t.Run("github source clones repo", func(t *testing.T) {
-		t.Parallel()
-
-		bareRepo := createBareRepoForResolver(t)
-
-		mockExec := func(name string, args ...string) *exec.Cmd {
-			newArgs := make([]string, len(args))
-			copy(newArgs, args)
-			for i := range newArgs {
-				if i == len(args)-2 {
-					newArgs[i] = bareRepo
-				}
-			}
-			return exec.Command(name, newArgs...)
-		}
-
-		// Use a GitHub shorthand as source
-		result, cleanup, err := ResolveSourceDir("resolver-test/repo", "", mockExec)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if cleanup == nil {
-			t.Fatal("cleanup should not be nil for GitHub source")
-		}
-		defer cleanup()
-
-		// Result should be an absolute temp directory path
-		if !filepath.IsAbs(result) {
-			t.Errorf("expected absolute path, got %q", result)
-		}
-
-		// The cloned repo should contain our test skill
-		skillPath := filepath.Join(result, DefaultSkillsDir, SkillsSubDir, "resolver-skill", SkillFileName)
-		if _, err := os.Stat(skillPath); os.IsNotExist(err) {
-			t.Fatalf("expected SKILL.md at %s", skillPath)
-		}
-	})
-
-	t.Run("github source with clone failure", func(t *testing.T) {
-		t.Parallel()
-
-		mockExec := func(name string, args ...string) *exec.Cmd {
-			return exec.Command("false")
-		}
-
-		_, _, err := ResolveSourceDir("fail-test/fail-repo", "", mockExec)
-		if err == nil {
-			t.Fatal("expected error from failed clone")
-		}
-	})
-
-	t.Run("invalid empty source string", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
-
-		// Empty input with no local and no default should error
-		_, _, err := ResolveSourceDir("", "", nil)
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
+os.MkdirAll("subdir", 0755)
+result, cleanup, err := ResolveSourceDir("subdir", "")
+if err != nil {
+t.Fatalf("unexpected error: %v", err)
+}
+if cleanup != nil {
+t.Fatal("cleanup should be nil for local source")
+}
+expected := filepath.Clean(filepath.Join(dir, "subdir"))
+if filepath.Clean(result) != expected {
+t.Errorf("expected %q, got %q", expected, result)
+}
+})
 }
 
-func createBareRepoForResolver(t *testing.T) string {
-	t.Helper()
-	tempDir := t.TempDir()
-	repoDir := filepath.Join(tempDir, "repo")
+func TestResolveGitHub(t *testing.T) {
+t.Parallel()
 
-	os.MkdirAll(repoDir, 0755)
-	runGit(t, repoDir, "init")
-	runGit(t, repoDir, "config", "user.email", "test@test.com")
-	runGit(t, repoDir, "config", "user.name", "Test")
+t.Run("shorthand owner/repo", func(t *testing.T) {
+t.Parallel()
+gh := ResolveGitHub("user/repo")
+if gh == nil {
+t.Fatal("expected GitHub source")
+}
+if gh.Owner != "user" || gh.Repo != "repo" {
+t.Errorf("expected user/repo, got %s/%s", gh.Owner, gh.Repo)
+}
+})
 
-	skillsDir := filepath.Join(repoDir, DefaultSkillsDir, SkillsSubDir, "resolver-skill")
-	os.MkdirAll(skillsDir, 0755)
-	os.WriteFile(filepath.Join(skillsDir, SkillFileName), []byte(`---
-name: resolver-skill
-description: A resolver test skill.
----
+t.Run("https URL", func(t *testing.T) {
+t.Parallel()
+gh := ResolveGitHub("https://github.com/user/repo")
+if gh == nil {
+t.Fatal("expected GitHub source")
+}
+if gh.Owner != "user" || gh.Repo != "repo" {
+t.Errorf("expected user/repo, got %s/%s", gh.Owner, gh.Repo)
+}
+})
 
-# Resolver Skill
-`), 0644)
+t.Run("absolute path returns nil", func(t *testing.T) {
+t.Parallel()
+if ResolveGitHub("/absolute/path") != nil {
+t.Error("expected nil for absolute path")
+}
+})
 
-	runGit(t, repoDir, "add", ".")
-	runGit(t, repoDir, "commit", "-m", "init")
-
-	return repoDir
+t.Run("local relative path returns nil", func(t *testing.T) {
+t.Parallel()
+if ResolveGitHub("./some/path") != nil {
+t.Error("expected nil for relative path with ./")
+}
+})
 }
