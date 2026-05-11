@@ -16,31 +16,31 @@ import (
 //  3. If source is non-empty, check if it's a GitHub reference and clone,
 //     or treat as a local path.
 func ResolveSourceDir(source string, defaultSource string) (string, func(), error) {
-// No explicit source: prefer local .agents/skills
-if source == "" {
-localDir := ResolveToSkillsDir(".")
-if _, err := os.Stat(localDir); err == nil {
-return ".", nil, nil
-}
-if defaultSource == "" {
-return "", nil, fmt.Errorf("no local skills found and no --source specified")
-}
-source = defaultSource
-}
+	// No explicit source: prefer local .agents/skills
+	if source == "" {
+		localDir := ResolveToSkillsDir(".")
+		if _, err := os.Stat(localDir); err == nil {
+			return ".", nil, nil
+		}
+		if defaultSource == "" {
+			return "", nil, fmt.Errorf("no local skills found and no --source specified")
+		}
+		source = defaultSource
+	}
 
-// GitHub source
-if gh := ResolveGitHub(source); gh != nil {
-repoDir, cleanup, err := CloneRepo(gh, nil)
-if err != nil {
-return "", nil, err
-}
-return repoDir, cleanup, nil
-}
+	// GitHub source
+	if gh := ResolveGitHub(source); gh != nil {
+		repoDir, cleanup, err := CloneRepo(gh, nil)
+		if err != nil {
+			return "", nil, err
+		}
+		return repoDir, cleanup, nil
+	}
 
-// Local path
-if !filepath.IsAbs(source) {
-cwd, _ := os.Getwd()
-source = filepath.Join(cwd, source)
-}
-return source, nil, nil
+	// Local path
+	if !filepath.IsAbs(source) {
+		cwd, _ := os.Getwd()
+		source = filepath.Join(cwd, source)
+	}
+	return source, nil, nil
 }

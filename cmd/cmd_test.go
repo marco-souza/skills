@@ -22,7 +22,21 @@ func setupSourceSkill(t *testing.T, src, dirName, name, description string) {
 		t.Fatalf("creating skill dir: %v", err)
 	}
 	content := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n# %s\n", name, description, name)
-	os.WriteFile(filepath.Join(skillDir, skills.SkillFileName), []byte(content), 0644)
+	mustWriteFile(t, filepath.Join(skillDir, skills.SkillFileName), []byte(content), 0o644)
+}
+
+func mustMkdirAll(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(path, perm); err != nil {
+		t.Fatalf("mkdir %s: %v", path, err)
+	}
+}
+
+func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
 }
 
 func setupCfg(t *testing.T) {
@@ -30,14 +44,12 @@ func setupCfg(t *testing.T) {
 	cfg = config.Default()
 }
 
-
-
 // ── toTitleCase (pure function) ──────────────────────────────────────────────
 
 func TestToTitleCase(t *testing.T) {
 
 	tests := []struct {
-		name string
+		name  string
 		input string
 		want  string
 	}{
@@ -65,7 +77,6 @@ func TestToTitleCase(t *testing.T) {
 
 func TestListSkills(t *testing.T) {
 
-
 	t.Run("no skills directory", func(t *testing.T) {
 
 		dir := t.TempDir()
@@ -81,7 +92,7 @@ func TestListSkills(t *testing.T) {
 	t.Run("empty skills directory", func(t *testing.T) {
 		dir := t.TempDir()
 		skillsDir := filepath.Join(dir, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
 		out := captureStdout(t, func() {
 			if err := listSkills(os.Stdout, dir); err != nil {
@@ -121,9 +132,9 @@ func TestListSkills(t *testing.T) {
 	t.Run("skips non-directories", func(t *testing.T) {
 		dir := t.TempDir()
 		skillsDir := filepath.Join(dir, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 		// Create a file (not a directory) in skills dir
-		os.WriteFile(filepath.Join(skillsDir, "NOT-A-DIR"), []byte("junk"), 0644)
+		mustWriteFile(t, filepath.Join(skillsDir, "NOT-A-DIR"), []byte("junk"), 0o644)
 		// Create a real skill
 		setupSourceSkill(t, dir, "real-skill", "real-skill", "Real skill.")
 
@@ -159,7 +170,6 @@ func captureStdout(t *testing.T, fn func()) string {
 // ── init command ─────────────────────────────────────────────────────────────
 
 func TestInitCommand(t *testing.T) {
-
 
 	t.Run("creates .agents/skills directory", func(t *testing.T) {
 
@@ -213,9 +223,9 @@ func TestInitCommand(t *testing.T) {
 		dir := t.TempDir()
 
 		agentsFile := filepath.Join(dir, ".agents", "AGENTS.md")
-		os.MkdirAll(filepath.Dir(agentsFile), 0755)
+		mustMkdirAll(t, filepath.Dir(agentsFile), 0o755)
 		original := "# My custom AGENTS.md\n"
-		os.WriteFile(agentsFile, []byte(original), 0644)
+		mustWriteFile(t, agentsFile, []byte(original), 0o644)
 
 		c := newInitCmd()
 		c.SetArgs([]string{dir})
@@ -235,9 +245,18 @@ func TestInitCommand(t *testing.T) {
 	t.Run("defaults to current directory", func(t *testing.T) {
 
 		dir := t.TempDir()
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
 
 		c := newInitCmd()
 		c.SetArgs([]string{})
@@ -258,7 +277,6 @@ func TestInitCommand(t *testing.T) {
 // ── config commands ──────────────────────────────────────────────────────────
 
 func TestConfigGetCmd(t *testing.T) {
-
 
 	t.Run("get default_source", func(t *testing.T) {
 
@@ -307,7 +325,7 @@ func TestConfigGetCmd(t *testing.T) {
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
 
-		err := c.Execute()
+		err = c.Execute()
 		if err == nil {
 			t.Fatal("expected error for unknown key")
 		}
@@ -333,7 +351,6 @@ func TestConfigGetCmd(t *testing.T) {
 }
 
 func TestConfigSetCmd(t *testing.T) {
-
 
 	t.Run("set default_source", func(t *testing.T) {
 
@@ -402,7 +419,6 @@ func TestConfigSetCmd(t *testing.T) {
 
 func TestConfigListCmd(t *testing.T) {
 
-
 	t.Run("lists all config values as YAML", func(t *testing.T) {
 
 		cfg = &config.Config{DefaultSource: "org/repo", DefaultRoot: "/root"}
@@ -429,7 +445,6 @@ func TestConfigListCmd(t *testing.T) {
 // ── install command ──────────────────────────────────────────────────────────
 
 func TestInstallCommand(t *testing.T) {
-
 
 	t.Run("install single skill", func(t *testing.T) {
 
@@ -517,7 +532,7 @@ func TestInstallCommand(t *testing.T) {
 
 		src := t.TempDir()
 		skillDir := setupSourceSkillDir(t, src, "scripted-skill")
-		os.WriteFile(filepath.Join(skillDir, skills.SkillFileName), []byte(`---
+		mustWriteFile(t, filepath.Join(skillDir, skills.SkillFileName), []byte(`---
 name: scripted-skill
 description: Has a script.
 metadata:
@@ -526,11 +541,11 @@ metadata:
 ---
 
 # Scripted Skill
-`), 0644)
+`), 0o644)
 
 		scriptDir := filepath.Join(skillDir, "scripts")
-		os.MkdirAll(scriptDir, 0755)
-		os.WriteFile(filepath.Join(scriptDir, "helper.sh"), []byte("#!/bin/bash\n"), 0755)
+		mustMkdirAll(t, scriptDir, 0o755)
+		mustWriteFile(t, filepath.Join(scriptDir, "helper.sh"), []byte("#!/bin/bash\n"), 0o755)
 
 		target := t.TempDir()
 
@@ -561,9 +576,9 @@ metadata:
 
 		src := t.TempDir()
 		skillsDir := filepath.Join(src, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 		// Create a file that's not a directory
-		os.WriteFile(filepath.Join(skillsDir, "README.md"), []byte("not a skill"), 0644)
+		mustWriteFile(t, filepath.Join(skillsDir, "README.md"), []byte("not a skill"), 0o644)
 		// Create a real skill
 		setupSourceSkill(t, src, "real-skill", "real-skill", "A real skill.")
 
@@ -627,7 +642,7 @@ metadata:
 
 		src := t.TempDir()
 		skillsDir := filepath.Join(src, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
 		target := t.TempDir()
 
@@ -649,7 +664,7 @@ metadata:
 		src := t.TempDir()
 		// No .agents/skills directory at all
 		skillsDir := filepath.Join(src, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
 		target := t.TempDir()
 
@@ -680,11 +695,9 @@ func setupSourceSkillDir(t *testing.T, src, dirName string) string {
 
 // ── install via GitHub (local bare repo) ─────────────────────────────────────
 
-
 // ── list command ─────────────────────────────────────────────────────────────
 
 func TestListCommand(t *testing.T) {
-
 
 	t.Run("list from local source", func(t *testing.T) {
 
@@ -719,7 +732,7 @@ func TestListCommand(t *testing.T) {
 
 		src := t.TempDir()
 		skillsDir := filepath.Join(src, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
 		var buf bytes.Buffer
 		c := newListCmd()
@@ -755,13 +768,12 @@ func TestListCommand(t *testing.T) {
 
 func TestUninstallCommand(t *testing.T) {
 
-
 	t.Run("uninstall existing skill", func(t *testing.T) {
 
 		target := t.TempDir()
 		skillsDir := filepath.Join(target, ".agents", "skills", "old-skill")
-		os.MkdirAll(skillsDir, 0755)
-		os.WriteFile(filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: old-skill\ndescription: test\n---\n"), 0644)
+		mustMkdirAll(t, skillsDir, 0o755)
+		mustWriteFile(t, filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: old-skill\ndescription: test\n---\n"), 0o644)
 
 		c := newUninstallCmd()
 		c.SetArgs([]string{"old-skill", "-t", target})
@@ -781,7 +793,7 @@ func TestUninstallCommand(t *testing.T) {
 
 		target := t.TempDir()
 		skillsDir := filepath.Join(target, ".agents", "skills")
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
 		c := newUninstallCmd()
 		c.SetArgs([]string{"nonexistent", "-t", target})
@@ -802,8 +814,8 @@ func TestUninstallCommand(t *testing.T) {
 		target := t.TempDir()
 		for _, name := range []string{"skill-a", "skill-b"} {
 			skillsDir := filepath.Join(target, ".agents", "skills", name)
-			os.MkdirAll(skillsDir, 0755)
-			os.WriteFile(filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: "+name+"\ndescription: test\n---\n"), 0644)
+			mustMkdirAll(t, skillsDir, 0o755)
+			mustWriteFile(t, filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: "+name+"\ndescription: test\n---\n"), 0o644)
 		}
 
 		c := newUninstallCmd()
@@ -840,8 +852,8 @@ func TestUninstallCommand(t *testing.T) {
 
 		target := t.TempDir()
 		skillsDir := filepath.Join(target, "custom", ".agents", "skills", "my-skill")
-		os.MkdirAll(skillsDir, 0755)
-		os.WriteFile(filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: my-skill\ndescription: test\n---\n"), 0644)
+		mustMkdirAll(t, skillsDir, 0o755)
+		mustWriteFile(t, filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: my-skill\ndescription: test\n---\n"), 0o644)
 
 		c := newUninstallCmd()
 		c.SetArgs([]string{"my-skill", "-t", filepath.Join(target, "custom")})
@@ -862,17 +874,25 @@ func TestUninstallCommand(t *testing.T) {
 
 func TestAddCommand(t *testing.T) {
 
-
 	t.Run("creates new skill", func(t *testing.T) {
 
 		dir := t.TempDir()
 		skillsDir := filepath.Join(dir, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
 		// Change to temp dir so addCmd finds the skills dir
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
 
 		c := newAddCmd()
 		c.SetArgs([]string{"my-new-skill"})
@@ -903,19 +923,32 @@ func TestAddCommand(t *testing.T) {
 		dir := t.TempDir()
 		skillsDir := filepath.Join(dir, skills.DefaultSkillsDir, skills.SkillsSubDir)
 		skillDir := filepath.Join(skillsDir, "existing-skill")
-		os.MkdirAll(skillDir, 0755)
-		os.WriteFile(filepath.Join(skillDir, skills.SkillFileName), []byte("---\nname: existing-skill\ndescription: exists\n---\n"), 0644)
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatalf("creating existing skill dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(skillDir, skills.SkillFileName), []byte("---\nname: existing-skill\ndescription: exists\n---\n"), 0o644); err != nil {
+			t.Fatalf("writing existing skill file: %v", err)
+		}
 
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
 
 		c := newAddCmd()
 		c.SetArgs([]string{"existing-skill"})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
 
-		err := c.Execute()
+		err = c.Execute()
 		if err == nil {
 			t.Fatal("expected error for duplicate skill")
 		}
@@ -942,7 +975,6 @@ func TestAddCommand(t *testing.T) {
 
 func TestResolveSourceDirViaCommands(t *testing.T) {
 
-
 	t.Run("local .agents found when source empty", func(t *testing.T) {
 
 		setupCfg(t)
@@ -950,9 +982,18 @@ func TestResolveSourceDirViaCommands(t *testing.T) {
 		dir := t.TempDir()
 		setupSourceSkill(t, dir, "local-skill", "local-skill", "Local skill.")
 
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
 
 		var buf bytes.Buffer
 		c := newListCmd()
@@ -999,9 +1040,18 @@ func TestResolveSourceDirViaCommands(t *testing.T) {
 		// Make dir have skills
 		setupSourceSkill(t, dir, "fallback-skill", "fallback-skill", "Fallback skill.")
 
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(t.TempDir()) // cwd with no .agents
-		defer os.Chdir(cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(t.TempDir()); err != nil { // cwd with no .agents
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
 
 		var buf bytes.Buffer
 		c := newListCmd()
@@ -1022,16 +1072,25 @@ func TestResolveSourceDirViaCommands(t *testing.T) {
 		cfg = &config.Config{DefaultSource: "", DefaultRoot: "."}
 
 		dir := t.TempDir()
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir) // no .agents here
-		defer os.Chdir(cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(dir); err != nil { // no .agents here
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
 
 		c := newListCmd()
 		c.SetArgs([]string{})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
 
-		err := c.Execute()
+		err = c.Execute()
 		if err == nil {
 			t.Fatal("expected error when no local skills and no default source")
 		}

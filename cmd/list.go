@@ -54,5 +54,3 @@ func listSkills(w io.Writer, root string) error {
 	}
 	return nil
 }
-
-
