@@ -54,12 +54,18 @@ func TestLoader_LoadAll(t *testing.T) {
 		createSkillDir(t, skillsDir, "valid", "valid", "A valid skill.")
 
 		// Directory without SKILL.md — should be skipped silently
-		os.MkdirAll(filepath.Join(skillsDir, "no-file"), 0755)
+		if err := os.MkdirAll(filepath.Join(skillsDir, "no-file"), 0o755); err != nil {
+			t.Fatalf("creating no-file dir: %v", err)
+		}
 
 		// Directory with invalid YAML — should warn and skip
 		invalidDir := filepath.Join(skillsDir, "invalid")
-		os.MkdirAll(invalidDir, 0755)
-		os.WriteFile(filepath.Join(invalidDir, SkillFileName), []byte("---\nbad yaml: [\n---\nbody"), 0644)
+		if err := os.MkdirAll(invalidDir, 0o755); err != nil {
+			t.Fatalf("creating invalid dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(invalidDir, SkillFileName), []byte("---\nbad yaml: [\n---\nbody"), 0o644); err != nil {
+			t.Fatalf("writing invalid SKILL.md: %v", err)
+		}
 
 		l := NewLoader(root)
 		skills, err := l.LoadAll()
@@ -78,7 +84,9 @@ func TestLoader_LoadAll(t *testing.T) {
 		t.Parallel()
 		root := t.TempDir()
 		skillsDir := filepath.Join(root, DefaultSkillsDir, SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+			t.Fatalf("creating skills dir: %v", err)
+		}
 
 		l := NewLoader(root)
 		skills, err := l.LoadAll()
@@ -106,10 +114,14 @@ func TestLoader_LoadAll(t *testing.T) {
 		t.Parallel()
 		root := t.TempDir()
 		skillsDir := filepath.Join(root, DefaultSkillsDir, SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+			t.Fatalf("creating skills dir: %v", err)
+		}
 
 		// Create a file (not directory) in skills dir
-		os.WriteFile(filepath.Join(skillsDir, "not-a-dir.md"), []byte("content"), 0644)
+		if err := os.WriteFile(filepath.Join(skillsDir, "not-a-dir.md"), []byte("content"), 0o644); err != nil {
+			t.Fatalf("writing file entry: %v", err)
+		}
 
 		l := NewLoader(root)
 		skills, err := l.LoadAll()

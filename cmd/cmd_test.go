@@ -3,8 +3,8 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -22,7 +22,21 @@ func setupSourceSkill(t *testing.T, src, dirName, name, description string) {
 		t.Fatalf("creating skill dir: %v", err)
 	}
 	content := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n# %s\n", name, description, name)
-	os.WriteFile(filepath.Join(skillDir, skills.SkillFileName), []byte(content), 0644)
+	mustWriteFile(t, filepath.Join(skillDir, skills.SkillFileName), []byte(content), 0o644)
+}
+
+func mustMkdirAll(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(path, perm); err != nil {
+		t.Fatalf("mkdir %s: %v", path, err)
+	}
+}
+
+func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
 }
 
 func setupCfg(t *testing.T) {
@@ -30,45 +44,12 @@ func setupCfg(t *testing.T) {
 	cfg = config.Default()
 }
 
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git %v failed: %v", args, err)
-	}
-}
-
-func createBareRepoWithSkills(t *testing.T) string {
-	t.Helper()
-	tempDir := t.TempDir()
-	workDir := filepath.Join(tempDir, "work")
-	bareRepo := filepath.Join(tempDir, "bare.git")
-
-	os.MkdirAll(workDir, 0755)
-	runGit(t, workDir, "init")
-	runGit(t, workDir, "config", "user.email", "test@test.com")
-	runGit(t, workDir, "config", "user.name", "Test")
-
-	// Add two skills
-	setupSourceSkill(t, workDir, "skill-alpha", "skill-alpha", "Alpha skill for testing.")
-	setupSourceSkill(t, workDir, "skill-beta", "skill-beta", "Beta skill for testing.")
-
-	runGit(t, workDir, "add", ".")
-	runGit(t, workDir, "commit", "-m", "init")
-	runGit(t, tempDir, "clone", "--bare", workDir, bareRepo)
-
-	return bareRepo
-}
-
 // ── toTitleCase (pure function) ──────────────────────────────────────────────
 
 func TestToTitleCase(t *testing.T) {
-	t.Parallel()
+
 	tests := []struct {
-		name string
+		name  string
 		input string
 		want  string
 	}{
@@ -83,7 +64,7 @@ func TestToTitleCase(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+
 			got := toTitleCase(tc.input)
 			if got != tc.want {
 				t.Errorf("toTitleCase(%q) = %q, want %q", tc.input, got, tc.want)
@@ -95,12 +76,11 @@ func TestToTitleCase(t *testing.T) {
 // ── listSkills ───────────────────────────────────────────────────────────────
 
 func TestListSkills(t *testing.T) {
-	t.Parallel()
 
 	t.Run("no skills directory", func(t *testing.T) {
-		t.Parallel()
+
 		dir := t.TempDir()
-		err := listSkills(dir)
+		err := listSkills(os.Stdout, dir)
 		if err == nil {
 			t.Fatal("expected error for missing skills directory")
 		}
@@ -110,44 +90,34 @@ func TestListSkills(t *testing.T) {
 	})
 
 	t.Run("empty skills directory", func(t *testing.T) {
-		t.Parallel()
 		dir := t.TempDir()
 		skillsDir := filepath.Join(dir, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
-		var buf bytes.Buffer
-		old := os.Stdout
-		os.Stdout = &writeSyncer{Writer: &buf}
-		defer func() { os.Stdout = old }()
-
-		err := listSkills(dir)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if buf.String() != "no skills found\n" {
-			t.Errorf("expected 'no skills found', got %q", buf.String())
+		out := captureStdout(t, func() {
+			if err := listSkills(os.Stdout, dir); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+		if out != "no skills found\n" {
+			t.Errorf("expected 'no skills found', got %q", out)
 		}
 	})
 
 	t.Run("lists skill names", func(t *testing.T) {
-		t.Parallel()
 		dir := t.TempDir()
 		setupSourceSkill(t, dir, "my-skill", "my-skill", "A test skill.")
 		setupSourceSkill(t, dir, "other-skill", "other-skill", "Another skill.")
 
-		var buf bytes.Buffer
-		old := os.Stdout
-		os.Stdout = &writeSyncer{Writer: &buf}
-		defer func() { os.Stdout = old }()
+		out := captureStdout(t, func() {
+			if err := listSkills(os.Stdout, dir); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 
-		err := listSkills(dir)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+		lines := strings.Split(strings.TrimSpace(out), "\n")
 		if len(lines) != 2 {
-			t.Fatalf("expected 2 lines, got %d: %q", len(lines), buf.String())
+			t.Fatalf("expected 2 lines, got %d: %q", len(lines), out)
 		}
 		// Order depends on filesystem; just check both are present
 		found := map[string]bool{}
@@ -155,53 +125,57 @@ func TestListSkills(t *testing.T) {
 			found[strings.TrimSpace(l)] = true
 		}
 		if !found["my-skill"] || !found["other-skill"] {
-			t.Errorf("expected both skill names, got: %q", buf.String())
+			t.Errorf("expected both skill names, got: %q", out)
 		}
 	})
 
 	t.Run("skips non-directories", func(t *testing.T) {
-		t.Parallel()
 		dir := t.TempDir()
 		skillsDir := filepath.Join(dir, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 		// Create a file (not a directory) in skills dir
-		os.WriteFile(filepath.Join(skillsDir, "NOT-A-DIR"), []byte("junk"), 0644)
+		mustWriteFile(t, filepath.Join(skillsDir, "NOT-A-DIR"), []byte("junk"), 0o644)
 		// Create a real skill
 		setupSourceSkill(t, dir, "real-skill", "real-skill", "Real skill.")
 
-		var buf bytes.Buffer
-		old := os.Stdout
-		os.Stdout = &writeSyncer{Writer: &buf}
-		defer func() { os.Stdout = old }()
-
-		err := listSkills(dir)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if !strings.Contains(buf.String(), "real-skill") {
-			t.Errorf("expected 'real-skill' in output, got %q", buf.String())
+		out := captureStdout(t, func() {
+			if err := listSkills(os.Stdout, dir); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+		if !strings.Contains(out, "real-skill") {
+			t.Errorf("expected 'real-skill' in output, got %q", out)
 		}
 	})
 }
 
-// writeSyncer wraps an io.Writer to satisfy *os.File interface for stdout swap.
-type writeSyncer struct {
-	*bytes.Buffer
+// captureStdout captures os.Stdout output produced by fn.
+// It must not be called from parallel sub-tests since it swaps os.Stdout.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+	fn()
+	w.Close()
+	os.Stdout = old
+	out, _ := io.ReadAll(r)
+	r.Close()
+	return string(out)
 }
-
-func (w *writeSyncer) Sync() error { return nil }
-func (w *writeSyncer) Fd() uintptr { return 0 }
 
 // ── init command ─────────────────────────────────────────────────────────────
 
 func TestInitCommand(t *testing.T) {
-	t.Parallel()
 
 	t.Run("creates .agents/skills directory", func(t *testing.T) {
-		t.Parallel()
+
 		dir := t.TempDir()
 
-		c := initCmd
+		c := newInitCmd()
 		c.SetArgs([]string{dir})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -217,10 +191,10 @@ func TestInitCommand(t *testing.T) {
 	})
 
 	t.Run("creates AGENTS.md", func(t *testing.T) {
-		t.Parallel()
+
 		dir := t.TempDir()
 
-		c := initCmd
+		c := newInitCmd()
 		c.SetArgs([]string{dir})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -245,15 +219,15 @@ func TestInitCommand(t *testing.T) {
 	})
 
 	t.Run("does not overwrite existing AGENTS.md", func(t *testing.T) {
-		t.Parallel()
+
 		dir := t.TempDir()
 
 		agentsFile := filepath.Join(dir, ".agents", "AGENTS.md")
-		os.MkdirAll(filepath.Dir(agentsFile), 0755)
+		mustMkdirAll(t, filepath.Dir(agentsFile), 0o755)
 		original := "# My custom AGENTS.md\n"
-		os.WriteFile(agentsFile, []byte(original), 0644)
+		mustWriteFile(t, agentsFile, []byte(original), 0o644)
 
-		c := initCmd
+		c := newInitCmd()
 		c.SetArgs([]string{dir})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -269,13 +243,22 @@ func TestInitCommand(t *testing.T) {
 	})
 
 	t.Run("defaults to current directory", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
 
-		c := initCmd
+		dir := t.TempDir()
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
+
+		c := newInitCmd()
 		c.SetArgs([]string{})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -294,14 +277,13 @@ func TestInitCommand(t *testing.T) {
 // ── config commands ──────────────────────────────────────────────────────────
 
 func TestConfigGetCmd(t *testing.T) {
-	t.Parallel()
 
 	t.Run("get default_source", func(t *testing.T) {
-		t.Parallel()
+
 		cfg = &config.Config{DefaultSource: "my-org/my-repo", DefaultRoot: "/root"}
 
 		var buf bytes.Buffer
-		c := configGetCmd
+		c := newConfigGetCmd()
 		c.SetArgs([]string{"default_source"})
 		c.SetOut(&buf)
 		c.SetErr(&bytes.Buffer{})
@@ -316,11 +298,11 @@ func TestConfigGetCmd(t *testing.T) {
 	})
 
 	t.Run("get default_root", func(t *testing.T) {
-		t.Parallel()
+
 		cfg = &config.Config{DefaultSource: "my-org/my-repo", DefaultRoot: "/custom/root"}
 
 		var buf bytes.Buffer
-		c := configGetCmd
+		c := newConfigGetCmd()
 		c.SetArgs([]string{"default_root"})
 		c.SetOut(&buf)
 		c.SetErr(&bytes.Buffer{})
@@ -335,15 +317,15 @@ func TestConfigGetCmd(t *testing.T) {
 	})
 
 	t.Run("unknown key", func(t *testing.T) {
-		t.Parallel()
+
 		cfg = config.Default()
 
-		c := configGetCmd
+		c := newConfigGetCmd()
 		c.SetArgs([]string{"unknown_key"})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
 
-		err := c.Execute()
+		err = c.Execute()
 		if err == nil {
 			t.Fatal("expected error for unknown key")
 		}
@@ -353,10 +335,10 @@ func TestConfigGetCmd(t *testing.T) {
 	})
 
 	t.Run("missing argument", func(t *testing.T) {
-		t.Parallel()
+
 		cfg = config.Default()
 
-		c := configGetCmd
+		c := newConfigGetCmd()
 		c.SetArgs([]string{})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -369,10 +351,9 @@ func TestConfigGetCmd(t *testing.T) {
 }
 
 func TestConfigSetCmd(t *testing.T) {
-	t.Parallel()
 
 	t.Run("set default_source", func(t *testing.T) {
-		t.Parallel()
+
 		// Use a temp HOME so config writes to a temp location
 		tmpHome := t.TempDir()
 		t.Setenv("HOME", tmpHome)
@@ -380,7 +361,7 @@ func TestConfigSetCmd(t *testing.T) {
 		cfg = &config.Config{DefaultSource: "old/repo", DefaultRoot: "."}
 
 		var buf bytes.Buffer
-		c := configSetCmd
+		c := newConfigSetCmd()
 		c.SetArgs([]string{"default_source", "new-org/new-repo"})
 		c.SetOut(&buf)
 		c.SetErr(&bytes.Buffer{})
@@ -398,13 +379,13 @@ func TestConfigSetCmd(t *testing.T) {
 	})
 
 	t.Run("set default_root", func(t *testing.T) {
-		t.Parallel()
+
 		tmpHome := t.TempDir()
 		t.Setenv("HOME", tmpHome)
 
 		cfg = &config.Config{DefaultSource: "my/repo", DefaultRoot: "."}
 
-		c := configSetCmd
+		c := newConfigSetCmd()
 		c.SetArgs([]string{"default_root", "/new/root"})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -418,10 +399,10 @@ func TestConfigSetCmd(t *testing.T) {
 	})
 
 	t.Run("unknown key", func(t *testing.T) {
-		t.Parallel()
+
 		cfg = config.Default()
 
-		c := configSetCmd
+		c := newConfigSetCmd()
 		c.SetArgs([]string{"bogus_key", "value"})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -437,14 +418,13 @@ func TestConfigSetCmd(t *testing.T) {
 }
 
 func TestConfigListCmd(t *testing.T) {
-	t.Parallel()
 
 	t.Run("lists all config values as YAML", func(t *testing.T) {
-		t.Parallel()
+
 		cfg = &config.Config{DefaultSource: "org/repo", DefaultRoot: "/root"}
 
 		var buf bytes.Buffer
-		c := configListCmd
+		c := newConfigListCmd()
 		c.SetArgs([]string{})
 		c.SetOut(&buf)
 		c.SetErr(&bytes.Buffer{})
@@ -465,10 +445,9 @@ func TestConfigListCmd(t *testing.T) {
 // ── install command ──────────────────────────────────────────────────────────
 
 func TestInstallCommand(t *testing.T) {
-	t.Parallel()
 
 	t.Run("install single skill", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
 		// Create source with skills
@@ -477,7 +456,7 @@ func TestInstallCommand(t *testing.T) {
 
 		target := t.TempDir()
 
-		c := installCmd
+		c := newInstallCmd()
 		c.SetArgs([]string{"my-skill", "-s", src, "-t", target})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -493,7 +472,7 @@ func TestInstallCommand(t *testing.T) {
 	})
 
 	t.Run("install multiple skills", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
 		src := t.TempDir()
@@ -502,7 +481,7 @@ func TestInstallCommand(t *testing.T) {
 
 		target := t.TempDir()
 
-		c := installCmd
+		c := newInstallCmd()
 		c.SetArgs([]string{"skill-a", "skill-b", "-s", src, "-t", target})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -520,7 +499,7 @@ func TestInstallCommand(t *testing.T) {
 	})
 
 	t.Run("install all skills", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
 		src := t.TempDir()
@@ -530,7 +509,7 @@ func TestInstallCommand(t *testing.T) {
 
 		target := t.TempDir()
 
-		c := installCmd
+		c := newInstallCmd()
 		c.SetArgs([]string{"--all", "-s", src, "-t", target})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -548,12 +527,12 @@ func TestInstallCommand(t *testing.T) {
 	})
 
 	t.Run("install all with scripts", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
 		src := t.TempDir()
 		skillDir := setupSourceSkillDir(t, src, "scripted-skill")
-		os.WriteFile(filepath.Join(skillDir, skills.SkillFileName), []byte(`---
+		mustWriteFile(t, filepath.Join(skillDir, skills.SkillFileName), []byte(`---
 name: scripted-skill
 description: Has a script.
 metadata:
@@ -562,15 +541,15 @@ metadata:
 ---
 
 # Scripted Skill
-`), 0644)
+`), 0o644)
 
 		scriptDir := filepath.Join(skillDir, "scripts")
-		os.MkdirAll(scriptDir, 0755)
-		os.WriteFile(filepath.Join(scriptDir, "helper.sh"), []byte("#!/bin/bash\n"), 0755)
+		mustMkdirAll(t, scriptDir, 0o755)
+		mustWriteFile(t, filepath.Join(scriptDir, "helper.sh"), []byte("#!/bin/bash\n"), 0o755)
 
 		target := t.TempDir()
 
-		c := installCmd
+		c := newInstallCmd()
 		c.SetArgs([]string{"scripted-skill", "-s", src, "-t", target})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -592,20 +571,20 @@ metadata:
 	})
 
 	t.Run("install all skips non-directories", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
 		src := t.TempDir()
 		skillsDir := filepath.Join(src, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 		// Create a file that's not a directory
-		os.WriteFile(filepath.Join(skillsDir, "README.md"), []byte("not a skill"), 0644)
+		mustWriteFile(t, filepath.Join(skillsDir, "README.md"), []byte("not a skill"), 0o644)
 		// Create a real skill
 		setupSourceSkill(t, src, "real-skill", "real-skill", "A real skill.")
 
 		target := t.TempDir()
 
-		c := installCmd
+		c := newInstallCmd()
 		c.SetArgs([]string{"--all", "-s", src, "-t", target})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -622,10 +601,10 @@ metadata:
 	})
 
 	t.Run("rejects skill names with --all", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
-		c := installCmd
+		c := newInstallCmd()
 		c.SetArgs([]string{"some-skill", "--all"})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -640,10 +619,10 @@ metadata:
 	})
 
 	t.Run("rejects missing skill names without --all", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
-		c := installCmd
+		c := newInstallCmd()
 		c.SetArgs([]string{})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -658,16 +637,16 @@ metadata:
 	})
 
 	t.Run("install nonexistent skill", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
 		src := t.TempDir()
 		skillsDir := filepath.Join(src, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
 		target := t.TempDir()
 
-		c := installCmd
+		c := newInstallCmd()
 		c.SetArgs([]string{"nonexistent", "-s", src, "-t", target})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -679,17 +658,17 @@ metadata:
 	})
 
 	t.Run("install with --all from empty source", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
 		src := t.TempDir()
 		// No .agents/skills directory at all
 		skillsDir := filepath.Join(src, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
 		target := t.TempDir()
 
-		c := installCmd
+		c := newInstallCmd()
 		c.SetArgs([]string{"--all", "-s", src, "-t", target})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -716,90 +695,12 @@ func setupSourceSkillDir(t *testing.T, src, dirName string) string {
 
 // ── install via GitHub (local bare repo) ─────────────────────────────────────
 
-func TestInstallViaGitHub(t *testing.T) {
-	t.Parallel()
-
-	t.Run("install from local bare repo", func(t *testing.T) {
-		t.Parallel()
-		setupCfg(t)
-
-		bareRepo := createBareRepoWithSkills(t)
-
-		// Override execCommand to use local bare repo instead of SSH
-		origExec := skills.ExecCommand
-		defer func() { skills.ExecCommand = origExec }()
-
-		skills.ExecCommand = func(name string, args ...string) *exec.Cmd {
-			// Replace the SSH URL argument with the local bare repo path
-			newArgs := make([]string, len(args))
-			copy(newArgs, args)
-			for i, arg := range newArgs {
-				// The SSH URL is the last non-directory argument (position varies)
-				if strings.HasSuffix(arg, ".git") || strings.Contains(arg, "bare") || arg == bareRepo {
-					newArgs[i] = bareRepo
-				}
-			}
-			// If we couldn't find it by matching, replace the clone source (5th arg for git clone --depth 1 <url> <dir>)
-			// args format: clone --depth 1 <SSHURL> <repoDir>
-			if len(newArgs) >= 5 {
-				newArgs[3] = bareRepo
-			}
-			return exec.Command(name, newArgs...)
-		}
-
-		target := t.TempDir()
-
-		c := installCmd
-		c.SetArgs([]string{"--all", "-s", "test/test-repo", "-t", target})
-		c.SetOut(&bytes.Buffer{})
-		c.SetErr(&bytes.Buffer{})
-
-		err := c.Execute()
-		if err != nil {
-			t.Fatalf("install from GitHub failed: %v", err)
-		}
-
-		// Verify both skills were installed
-		for _, name := range []string{"skill-alpha", "skill-beta"} {
-			dest := filepath.Join(target, ".agents", "skills", name, skills.SkillFileName)
-			if _, err := os.Stat(dest); os.IsNotExist(err) {
-				t.Fatalf("skill %q was not installed from GitHub source", name)
-			}
-		}
-	})
-
-	t.Run("GitHub clone failure returns error", func(t *testing.T) {
-		t.Parallel()
-		setupCfg(t)
-
-		origExec := skills.ExecCommand
-		defer func() { skills.ExecCommand = origExec }()
-
-		skills.ExecCommand = func(name string, args ...string) *exec.Cmd {
-			return exec.Command("false")
-		}
-
-		target := t.TempDir()
-
-		c := installCmd
-		c.SetArgs([]string{"some-skill", "-s", "fail-test/fail-repo", "-t", target})
-		c.SetOut(&bytes.Buffer{})
-		c.SetErr(&bytes.Buffer{})
-
-		err := c.Execute()
-		if err == nil {
-			t.Fatal("expected error from failed GitHub clone")
-		}
-	})
-}
-
 // ── list command ─────────────────────────────────────────────────────────────
 
 func TestListCommand(t *testing.T) {
-	t.Parallel()
 
 	t.Run("list from local source", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
 		src := t.TempDir()
@@ -807,7 +708,7 @@ func TestListCommand(t *testing.T) {
 		setupSourceSkill(t, src, "skill-two", "skill-two", "Second skill.")
 
 		var buf bytes.Buffer
-		c := listCmd
+		c := newListCmd()
 		c.SetArgs([]string{"-s", src})
 		c.SetOut(&buf)
 		c.SetErr(&bytes.Buffer{})
@@ -826,15 +727,15 @@ func TestListCommand(t *testing.T) {
 	})
 
 	t.Run("list from empty source", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
 		src := t.TempDir()
 		skillsDir := filepath.Join(src, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
 		var buf bytes.Buffer
-		c := listCmd
+		c := newListCmd()
 		c.SetArgs([]string{"-s", src})
 		c.SetOut(&buf)
 		c.SetErr(&bytes.Buffer{})
@@ -848,10 +749,10 @@ func TestListCommand(t *testing.T) {
 	})
 
 	t.Run("list from nonexistent source", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
-		c := listCmd
+		c := newListCmd()
 		c.SetArgs([]string{"-s", "/nonexistent/path/that/does/not/exist"})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -866,16 +767,15 @@ func TestListCommand(t *testing.T) {
 // ── uninstall command ────────────────────────────────────────────────────────
 
 func TestUninstallCommand(t *testing.T) {
-	t.Parallel()
 
 	t.Run("uninstall existing skill", func(t *testing.T) {
-		t.Parallel()
+
 		target := t.TempDir()
 		skillsDir := filepath.Join(target, ".agents", "skills", "old-skill")
-		os.MkdirAll(skillsDir, 0755)
-		os.WriteFile(filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: old-skill\ndescription: test\n---\n"), 0644)
+		mustMkdirAll(t, skillsDir, 0o755)
+		mustWriteFile(t, filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: old-skill\ndescription: test\n---\n"), 0o644)
 
-		c := uninstallCmd
+		c := newUninstallCmd()
 		c.SetArgs([]string{"old-skill", "-t", target})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -890,12 +790,12 @@ func TestUninstallCommand(t *testing.T) {
 	})
 
 	t.Run("uninstall nonexistent skill", func(t *testing.T) {
-		t.Parallel()
+
 		target := t.TempDir()
 		skillsDir := filepath.Join(target, ".agents", "skills")
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
-		c := uninstallCmd
+		c := newUninstallCmd()
 		c.SetArgs([]string{"nonexistent", "-t", target})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -910,15 +810,15 @@ func TestUninstallCommand(t *testing.T) {
 	})
 
 	t.Run("uninstall multiple skills", func(t *testing.T) {
-		t.Parallel()
+
 		target := t.TempDir()
 		for _, name := range []string{"skill-a", "skill-b"} {
 			skillsDir := filepath.Join(target, ".agents", "skills", name)
-			os.MkdirAll(skillsDir, 0755)
-			os.WriteFile(filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: "+name+"\ndescription: test\n---\n"), 0644)
+			mustMkdirAll(t, skillsDir, 0o755)
+			mustWriteFile(t, filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: "+name+"\ndescription: test\n---\n"), 0o644)
 		}
 
-		c := uninstallCmd
+		c := newUninstallCmd()
 		c.SetArgs([]string{"skill-a", "skill-b", "-t", target})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -936,8 +836,8 @@ func TestUninstallCommand(t *testing.T) {
 	})
 
 	t.Run("uninstall without skill names", func(t *testing.T) {
-		t.Parallel()
-		c := uninstallCmd
+
+		c := newUninstallCmd()
 		c.SetArgs([]string{})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -949,13 +849,13 @@ func TestUninstallCommand(t *testing.T) {
 	})
 
 	t.Run("uninstall with custom target dir", func(t *testing.T) {
-		t.Parallel()
-		target := t.TempDir()
-		skillsDir := filepath.Join(target, "custom", "skills", "my-skill")
-		os.MkdirAll(skillsDir, 0755)
-		os.WriteFile(filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: my-skill\ndescription: test\n---\n"), 0644)
 
-		c := uninstallCmd
+		target := t.TempDir()
+		skillsDir := filepath.Join(target, "custom", ".agents", "skills", "my-skill")
+		mustMkdirAll(t, skillsDir, 0o755)
+		mustWriteFile(t, filepath.Join(skillsDir, skills.SkillFileName), []byte("---\nname: my-skill\ndescription: test\n---\n"), 0o644)
+
+		c := newUninstallCmd()
 		c.SetArgs([]string{"my-skill", "-t", filepath.Join(target, "custom")})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -973,20 +873,28 @@ func TestUninstallCommand(t *testing.T) {
 // ── add command ──────────────────────────────────────────────────────────────
 
 func TestAddCommand(t *testing.T) {
-	t.Parallel()
 
 	t.Run("creates new skill", func(t *testing.T) {
-		t.Parallel()
+
 		dir := t.TempDir()
 		skillsDir := filepath.Join(dir, skills.DefaultSkillsDir, skills.SkillsSubDir)
-		os.MkdirAll(skillsDir, 0755)
+		mustMkdirAll(t, skillsDir, 0o755)
 
 		// Change to temp dir so addCmd finds the skills dir
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
 
-		c := addCmd
+		c := newAddCmd()
 		c.SetArgs([]string{"my-new-skill"})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -1011,23 +919,36 @@ func TestAddCommand(t *testing.T) {
 	})
 
 	t.Run("rejects duplicate skill", func(t *testing.T) {
-		t.Parallel()
+
 		dir := t.TempDir()
 		skillsDir := filepath.Join(dir, skills.DefaultSkillsDir, skills.SkillsSubDir)
 		skillDir := filepath.Join(skillsDir, "existing-skill")
-		os.MkdirAll(skillDir, 0755)
-		os.WriteFile(filepath.Join(skillDir, skills.SkillFileName), []byte("---\nname: existing-skill\ndescription: exists\n---\n"), 0644)
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatalf("creating existing skill dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(skillDir, skills.SkillFileName), []byte("---\nname: existing-skill\ndescription: exists\n---\n"), 0o644); err != nil {
+			t.Fatalf("writing existing skill file: %v", err)
+		}
 
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
 
-		c := addCmd
+		c := newAddCmd()
 		c.SetArgs([]string{"existing-skill"})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
 
-		err := c.Execute()
+		err = c.Execute()
 		if err == nil {
 			t.Fatal("expected error for duplicate skill")
 		}
@@ -1037,8 +958,8 @@ func TestAddCommand(t *testing.T) {
 	})
 
 	t.Run("missing argument", func(t *testing.T) {
-		t.Parallel()
-		c := addCmd
+
+		c := newAddCmd()
 		c.SetArgs([]string{})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
@@ -1053,21 +974,29 @@ func TestAddCommand(t *testing.T) {
 // ── resolve source dir via commands ──────────────────────────────────────────
 
 func TestResolveSourceDirViaCommands(t *testing.T) {
-	t.Parallel()
 
 	t.Run("local .agents found when source empty", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
 		dir := t.TempDir()
 		setupSourceSkill(t, dir, "local-skill", "local-skill", "Local skill.")
 
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir)
-		defer os.Chdir(cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
 
 		var buf bytes.Buffer
-		c := listCmd
+		c := newListCmd()
 		c.SetArgs([]string{})
 		c.SetOut(&buf)
 		c.SetErr(&bytes.Buffer{})
@@ -1081,14 +1010,14 @@ func TestResolveSourceDirViaCommands(t *testing.T) {
 	})
 
 	t.Run("explicit local path source", func(t *testing.T) {
-		t.Parallel()
+
 		setupCfg(t)
 
 		src := t.TempDir()
 		setupSourceSkill(t, src, "path-skill", "path-skill", "Path skill.")
 
 		var buf bytes.Buffer
-		c := listCmd
+		c := newListCmd()
 		c.SetArgs([]string{"-s", src})
 		c.SetOut(&buf)
 		c.SetErr(&bytes.Buffer{})
@@ -1102,7 +1031,7 @@ func TestResolveSourceDirViaCommands(t *testing.T) {
 	})
 
 	t.Run("missing local with no default falls back to configured default", func(t *testing.T) {
-		t.Parallel()
+
 		// cfg has DefaultSource set; when cwd has no .agents and no --source,
 		// it should fall back to cfg.DefaultSource
 		dir := t.TempDir()
@@ -1111,12 +1040,21 @@ func TestResolveSourceDirViaCommands(t *testing.T) {
 		// Make dir have skills
 		setupSourceSkill(t, dir, "fallback-skill", "fallback-skill", "Fallback skill.")
 
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(t.TempDir()) // cwd with no .agents
-		defer os.Chdir(cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(t.TempDir()); err != nil { // cwd with no .agents
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
 
 		var buf bytes.Buffer
-		c := listCmd
+		c := newListCmd()
 		c.SetArgs([]string{})
 		c.SetOut(&buf)
 		c.SetErr(&bytes.Buffer{})
@@ -1130,20 +1068,29 @@ func TestResolveSourceDirViaCommands(t *testing.T) {
 	})
 
 	t.Run("missing local with no default source errors", func(t *testing.T) {
-		t.Parallel()
+
 		cfg = &config.Config{DefaultSource: "", DefaultRoot: "."}
 
 		dir := t.TempDir()
-		cwd, _ := os.Getwd()
-		_ = os.Chdir(dir) // no .agents here
-		defer os.Chdir(cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(dir); err != nil { // no .agents here
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
 
-		c := listCmd
+		c := newListCmd()
 		c.SetArgs([]string{})
 		c.SetOut(&bytes.Buffer{})
 		c.SetErr(&bytes.Buffer{})
 
-		err := c.Execute()
+		err = c.Execute()
 		if err == nil {
 			t.Fatal("expected error when no local skills and no default source")
 		}

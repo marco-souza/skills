@@ -77,83 +77,13 @@ func (i *Installer) installWithTracking(skillName, parentDir string, installed m
 	return nil
 }
 
-// InstallFromGitHub clones a GitHub repository and installs every skill it contains into the target project.
-// The parentDir argument specifies the directory that contains the skills/ subdirectory.
-func (i *Installer) InstallFromGitHub(src *GitHubSource, parentDir string) error {
-	repoDir, cleanup, err := CloneRepo(src)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
-	skillsPath := filepath.Join(repoDir, DefaultSkillsDir, SkillsSubDir)
-	if _, err := os.Stat(skillsPath); os.IsNotExist(err) {
-		skillsPath = repoDir
-	}
-
-	entries, err := os.ReadDir(skillsPath)
-	if err != nil {
-		return fmt.Errorf("reading skills in cloned repo: %w", err)
-	}
-
-	count := 0
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		skillSrc := filepath.Join(skillsPath, entry.Name())
-		skillDest := filepath.Join(parentDir, SkillsSubDir, entry.Name())
-
-		if err := os.MkdirAll(filepath.Dir(skillDest), 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
-			continue
-		}
-		if err := copyDir(skillSrc, skillDest); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to copy %s: %v\n", entry.Name(), err)
-			continue
-		}
-
-		// Load the skill to resolve script dependencies, then copy them.
-		skillPath := filepath.Join(skillSrc, SkillFileName)
-		skill := &Skill{}
-		if err := skill.LoadFromPath(skillPath); err == nil {
-			if err := i.installScripts(skill, skillSrc, parentDir); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to install scripts for %s: %v\n", entry.Name(), err)
-			}
-		}
-
-		count++
-	}
-
-	fmt.Printf("Installed %d skills from %s to %s\n", count, src.SSHURL, parentDir)
-	return nil
-}
-
-// copyFile copies a single file from src to dst.
-func copyFile(src, dst string) (err error) {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer func() { if cerr := dstFile.Close(); cerr != nil && err == nil { err = cerr } }()
-
-	_, err = io.Copy(dstFile, srcFile)
-	return err
-}
-
 // InstallAll installs every skill from the source directory to the target project.
 // It also copies the entire scripts/ directory so all shared scripts are available.
 // The parentDir argument specifies the directory that contains the skills/ subdirectory (e.g., ".agents").
 func (i *Installer) InstallAll(parentDir string) error {
 	skillsPath := filepath.Join(i.sourceDir(), DefaultSkillsDir, SkillsSubDir)
 	if _, err := os.Stat(skillsPath); os.IsNotExist(err) {
-		// Fall back to source root (mirrors InstallFromGitHub behavior)
+		// Fall back to source root
 		skillsPath = i.sourceDir()
 	}
 
@@ -179,7 +109,7 @@ func (i *Installer) InstallAll(parentDir string) error {
 	}
 
 	// Copy the entire scripts directory so all shared scripts are available.
-	if err := i.InstallAllScripts(parentDir); err != nil {
+	if err := i.installAllScripts(parentDir); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
 
@@ -187,9 +117,8 @@ func (i *Installer) InstallAll(parentDir string) error {
 	return nil
 }
 
-// InstallAllScripts copies the entire scripts/ directory from the source to the target project.
-// It should be called after installing all skills to ensure every shared script is available.
-func (i *Installer) InstallAllScripts(parentDir string) error {
+// installAllScripts copies the entire scripts/ directory from the source to the target project.
+func (i *Installer) installAllScripts(parentDir string) error {
 	scriptsSrc := filepath.Join(i.sourceDir(), DefaultSkillsDir, "scripts")
 	if _, err := os.Stat(scriptsSrc); os.IsNotExist(err) {
 		return nil // no scripts directory — not an error
@@ -245,6 +174,28 @@ func (i *Installer) installScripts(skill *Skill, skillSrcDir, parentDir string) 
 	return nil
 }
 
+// copyFile copies a single file from src to dst.
+func copyFile(src, dst string) (err error) {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := dstFile.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
+
+	_, err = io.Copy(dstFile, srcFile)
+	return err
+}
+
 func copyDir(src, dst string) error {
 	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -271,7 +222,11 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		defer func() { if cerr := dstFile.Close(); cerr != nil && err == nil { err = cerr } }()
+		defer func() {
+			if cerr := dstFile.Close(); cerr != nil && err == nil {
+				err = cerr
+			}
+		}()
 
 		_, err = io.Copy(dstFile, srcFile)
 		return err

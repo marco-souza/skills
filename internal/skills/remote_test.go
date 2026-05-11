@@ -13,19 +13,16 @@ func TestCloneRepo(t *testing.T) {
 
 	t.Run("clones from local bare repo", func(t *testing.T) {
 		t.Parallel()
-		origExec := execCommand
-		defer func() { execCommand = origExec }()
 
 		bareRepo := createBareRepoForRemote(t)
 
 		gh := &GitHubSource{
 			Owner:  "test",
 			Repo:   "test-repo",
-			URL:    "file://" + bareRepo,
 			SSHURL: "file://" + bareRepo,
 		}
 
-		repoDir, cleanup, err := CloneRepo(gh)
+		repoDir, cleanup, err := CloneRepo(gh, nil)
 		if err != nil {
 			t.Fatalf("CloneRepo failed: %v", err)
 		}
@@ -38,13 +35,11 @@ func TestCloneRepo(t *testing.T) {
 
 	t.Run("creates temp dir", func(t *testing.T) {
 		t.Parallel()
-		origExec := execCommand
-		defer func() { execCommand = origExec }()
 
 		bareRepo := createBareRepoForRemote(t)
 		callCount := 0
 
-		execCommand = func(name string, args ...string) *exec.Cmd {
+		mockExec := func(name string, args ...string) *exec.Cmd {
 			callCount++
 			// Replace SSHURL arg with bare repo
 			newArgs := make([]string, len(args))
@@ -60,11 +55,10 @@ func TestCloneRepo(t *testing.T) {
 		gh := &GitHubSource{
 			Owner:  "test",
 			Repo:   "test-repo",
-			URL:    "https://github.com/test/test-repo",
 			SSHURL: "git@github.com:test/test-repo.git",
 		}
 
-		repoDir, cleanup, err := CloneRepo(gh)
+		repoDir, cleanup, err := CloneRepo(gh, mockExec)
 		if err != nil {
 			t.Fatalf("CloneRepo failed: %v", err)
 		}
@@ -82,12 +76,10 @@ func TestCloneRepo(t *testing.T) {
 
 	t.Run("cleanup removes temp dir", func(t *testing.T) {
 		t.Parallel()
-		origExec := execCommand
-		defer func() { execCommand = origExec }()
 
 		bareRepo := createBareRepoForRemote(t)
 
-		execCommand = func(name string, args ...string) *exec.Cmd {
+		mockExec := func(name string, args ...string) *exec.Cmd {
 			newArgs := make([]string, len(args))
 			copy(newArgs, args)
 			for i := range newArgs {
@@ -101,11 +93,10 @@ func TestCloneRepo(t *testing.T) {
 		gh := &GitHubSource{
 			Owner:  "test",
 			Repo:   "cleanup-repo",
-			URL:    "https://github.com/test/cleanup-repo",
 			SSHURL: "git@github.com:test/cleanup-repo.git",
 		}
 
-		repoDir, cleanup, err := CloneRepo(gh)
+		repoDir, cleanup, err := CloneRepo(gh, mockExec)
 		if err != nil {
 			t.Fatalf("CloneRepo failed: %v", err)
 		}
@@ -128,10 +119,8 @@ func TestCloneRepo(t *testing.T) {
 
 	t.Run("clone failure returns error", func(t *testing.T) {
 		t.Parallel()
-		origExec := execCommand
-		defer func() { execCommand = origExec }()
 
-		execCommand = func(name string, args ...string) *exec.Cmd {
+		mockExec := func(name string, args ...string) *exec.Cmd {
 			// Return a command that will fail
 			return exec.Command("false")
 		}
@@ -139,11 +128,10 @@ func TestCloneRepo(t *testing.T) {
 		gh := &GitHubSource{
 			Owner:  "test",
 			Repo:   "fail-repo",
-			URL:    "https://github.com/test/fail-repo",
 			SSHURL: "git@github.com:test/fail-repo.git",
 		}
 
-		_, _, err := CloneRepo(gh)
+		_, _, err := CloneRepo(gh, mockExec)
 		if err == nil {
 			t.Fatal("expected error from failed clone")
 		}
@@ -154,21 +142,17 @@ func TestCloneRepo(t *testing.T) {
 		// We can't easily mock os.MkdirTemp, but we can test
 		// that CloneRepo propagates errors from exec.Command.
 		// This test verifies the error path for failed clones.
-		origExec := execCommand
-		defer func() { execCommand = origExec }()
-
-		execCommand = func(name string, args ...string) *exec.Cmd {
+		mockExec := func(name string, args ...string) *exec.Cmd {
 			return exec.Command("false")
 		}
 
 		gh := &GitHubSource{
 			Owner:  "test",
 			Repo:   "err-repo",
-			URL:    "https://github.com/test/err-repo",
 			SSHURL: "git@github.com:test/err-repo.git",
 		}
 
-		_, cleanup, err := CloneRepo(gh)
+		_, cleanup, err := CloneRepo(gh, mockExec)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -184,24 +168,32 @@ func createBareRepoForRemote(t *testing.T) string {
 	tempDir := t.TempDir()
 	repoDir := filepath.Join(tempDir, "repo")
 
-	os.MkdirAll(repoDir, 0755)
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("creating repo dir: %v", err)
+	}
 	runGit(t, repoDir, "init")
 	runGit(t, repoDir, "config", "user.email", "test@test.com")
 	runGit(t, repoDir, "config", "user.name", "Test")
 
 	// Create a README.md
-	os.WriteFile(filepath.Join(repoDir, "README.md"), []byte("# test repo"), 0644)
+	if err := os.WriteFile(filepath.Join(repoDir, "README.md"), []byte("# test repo"), 0o644); err != nil {
+		t.Fatalf("writing README.md: %v", err)
+	}
 
 	// Create a SKILL.md to make it look like a skills repo
 	skillsDir := filepath.Join(repoDir, DefaultSkillsDir, SkillsSubDir, "remote-skill")
-	os.MkdirAll(skillsDir, 0755)
-	os.WriteFile(filepath.Join(skillsDir, SkillFileName), []byte(`---
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		t.Fatalf("creating skills dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillsDir, SkillFileName), []byte(`---
 name: remote-skill
 description: A remote skill for testing.
 ---
 
 # Remote Skill
-`), 0644)
+`), 0o644); err != nil {
+		t.Fatalf("writing SKILL.md: %v", err)
+	}
 
 	runGit(t, repoDir, "add", ".")
 	runGit(t, repoDir, "commit", "-m", "init")
@@ -214,22 +206,19 @@ description: A remote skill for testing.
 // that easily, we instead verify error propagation through a helper.
 func TestCloneRepo_ErrorPropagation(t *testing.T) {
 	t.Parallel()
-	origExec := execCommand
-	defer func() { execCommand = origExec }()
 
 	// Use a command that always fails
-	execCommand = func(name string, args ...string) *exec.Cmd {
+	mockExec := func(name string, args ...string) *exec.Cmd {
 		return exec.Command("sh", "-c", "exit 1")
 	}
 
 	gh := &GitHubSource{
 		Owner:  "fake",
 		Repo:   "fake-repo",
-		URL:    "https://github.com/fake/fake-repo",
 		SSHURL: "git@github.com:fake/fake-repo.git",
 	}
 
-	_, _, err := CloneRepo(gh)
+	_, _, err := CloneRepo(gh, mockExec)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -242,14 +231,12 @@ func TestCloneRepo_ErrorPropagation(t *testing.T) {
 // This avoids needing to inject the SSH URL by directly patching execCommand.
 func TestCloneRepo_EndToEnd(t *testing.T) {
 	t.Parallel()
-	origExec := execCommand
-	defer func() { execCommand = origExec }()
 
 	bareRepo := createBareRepoForRemote(t)
 
 	// Track the actual command args
 	var capturedArgs []string
-	execCommand = func(name string, args ...string) *exec.Cmd {
+	mockExec := func(name string, args ...string) *exec.Cmd {
 		capturedArgs = args
 		// Replace the SSH URL with our local bare repo path
 		newArgs := make([]string, len(args))
@@ -266,11 +253,10 @@ func TestCloneRepo_EndToEnd(t *testing.T) {
 	gh := &GitHubSource{
 		Owner:  "e2e",
 		Repo:   "e2e-repo",
-		URL:    "https://github.com/e2e/e2e-repo",
 		SSHURL: "git@github.com:e2e/e2e-repo.git",
 	}
 
-	repoDir, cleanup, err := CloneRepo(gh)
+	repoDir, cleanup, err := CloneRepo(gh, mockExec)
 	if err != nil {
 		t.Fatalf("CloneRepo failed: %v", err)
 	}
@@ -293,57 +279,13 @@ func TestCloneRepo_EndToEnd(t *testing.T) {
 	}
 }
 
-// TestInstaller_InstallFromGitHub_LocalRepo tests InstallFromGitHub with a local bare repo.
-func TestInstaller_InstallFromGitHub_LocalRepo(t *testing.T) {
-	t.Parallel()
-	origExec := execCommand
-	defer func() { execCommand = origExec }()
-
-	bareRepo := createBareRepoForRemote(t)
-
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		newArgs := make([]string, len(args))
-		copy(newArgs, args)
-		for i := range newArgs {
-			if i == len(args)-2 {
-				newArgs[i] = bareRepo
-			}
-		}
-		return exec.Command(name, newArgs...)
-	}
-
-	gh := &GitHubSource{
-		Owner:  "installer",
-		Repo:   "installer-repo",
-		URL:    "https://github.com/installer/installer-repo",
-		SSHURL: "git@github.com:installer/installer-repo.git",
-	}
-
-	installer := &Installer{}
-	target := t.TempDir()
-	parentDir := filepath.Join(target, DefaultSkillsDir)
-
-	err := installer.InstallFromGitHub(gh, parentDir)
-	if err != nil {
-		t.Fatalf("InstallFromGitHub failed: %v", err)
-	}
-
-	// Verify the skill was installed
-	destSkill := filepath.Join(parentDir, SkillsSubDir, "remote-skill", SkillFileName)
-	if _, err := os.Stat(destSkill); os.IsNotExist(err) {
-		t.Fatal("remote-skill was not installed")
-	}
-}
-
 // TestCloneRepo_SourceDirResolution tests that the clone destination includes the repo name.
 func TestCloneRepo_RepoDirIncludesRepoName(t *testing.T) {
 	t.Parallel()
-	origExec := execCommand
-	defer func() { execCommand = origExec }()
 
 	bareRepo := createBareRepoForRemote(t)
 
-	execCommand = func(name string, args ...string) *exec.Cmd {
+	mockExec := func(name string, args ...string) *exec.Cmd {
 		newArgs := make([]string, len(args))
 		copy(newArgs, args)
 		for i := range newArgs {
@@ -357,11 +299,10 @@ func TestCloneRepo_RepoDirIncludesRepoName(t *testing.T) {
 	gh := &GitHubSource{
 		Owner:  "dir-test",
 		Repo:   "named-repo",
-		URL:    "https://github.com/dir-test/named-repo",
 		SSHURL: "git@github.com:dir-test/named-repo.git",
 	}
 
-	repoDir, cleanup, err := CloneRepo(gh)
+	repoDir, cleanup, err := CloneRepo(gh, mockExec)
 	if err != nil {
 		t.Fatalf("CloneRepo failed: %v", err)
 	}

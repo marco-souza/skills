@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Skill represents an AI agent skill definition loaded from a SKILL.md file.
@@ -15,16 +17,8 @@ type Skill struct {
 	Name string `yaml:"name"`
 	// Description explains what the skill does.
 	Description string `yaml:"description"`
-	// Tags are optional labels for categorising the skill.
-	Tags []string `yaml:"tags,omitempty"`
-	// Category is an optional high-level grouping.
-	Category string `yaml:"category,omitempty"`
-	// Author is the skill's creator.
-	Author string `yaml:"author,omitempty"`
-	// Version is the skill's semantic version.
-	Version string `yaml:"version,omitempty"`
 	// Metadata holds arbitrary extra data from the frontmatter.
-	Metadata map[string]any `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	Metadata map[string]any `yaml:"metadata,omitempty"`
 	// Path is the filesystem path to the SKILL.md file.
 	Path string `json:"-"`
 	// Content is the markdown body after the frontmatter.
@@ -93,28 +87,37 @@ func (s *Skill) LoadFromPath(path string) error {
 	if desc, ok := frontmatter["description"].(string); ok {
 		s.Description = desc
 	}
-	if tags, ok := frontmatter["tags"].([]any); ok {
-		for _, t := range tags {
-			if ts, ok := t.(string); ok {
-				s.Tags = append(s.Tags, ts)
-			}
-		}
-	}
-	if cat, ok := frontmatter["category"].(string); ok {
-		s.Category = cat
-	}
-	if author, ok := frontmatter["author"].(string); ok {
-		s.Author = author
-	}
-	if version, ok := frontmatter["version"].(string); ok {
-		s.Version = version
-	}
 	if metadata, ok := frontmatter["metadata"].(map[string]any); ok {
 		s.Metadata = metadata
 	}
 
 	s.Content = strings.TrimSpace(body)
 	return nil
+}
+
+// ParseFrontmatter extracts YAML frontmatter from a markdown string.
+// It returns the parsed frontmatter map, the remaining body content, and an error if parsing fails.
+func ParseFrontmatter(content string) (map[string]any, string, error) {
+	content = strings.TrimSpace(content)
+
+	if !strings.HasPrefix(content, "---") {
+		return nil, content, fmt.Errorf("missing YAML frontmatter (must start with ---)")
+	}
+
+	parts := strings.SplitN(content[3:], "---", 2)
+	if len(parts) < 2 {
+		return nil, content, fmt.Errorf("missing closing --- for frontmatter")
+	}
+
+	yamlContent := strings.TrimSpace(parts[0])
+	body := strings.TrimSpace(parts[1])
+
+	var fm map[string]any
+	if err := yaml.Unmarshal([]byte(yamlContent), &fm); err != nil {
+		return nil, body, fmt.Errorf("invalid YAML: %w", err)
+	}
+
+	return fm, body, nil
 }
 
 // Scripts returns the list of script file paths declared in metadata.scripts.
