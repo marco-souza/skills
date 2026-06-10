@@ -1,11 +1,58 @@
 ---
 name: project-files
-description: Manage structured communication files (PLAN.md, TODO.md, SPEC.md, etc.) to coordinate work across agents and sessions. Use when starting complex tasks, delegating to subagents, or maintaining project state.
+description: >
+  Manage structured communication files (PLAN.md, TODO.md, SPEC.md, etc.)
+  to coordinate work across agents and sessions. Use when starting
+  complex tasks, delegating to subagents, or maintaining project state.
 ---
 
 # Project Communication Files
 
 Standard files for coordinating work across agents and sessions. These files serve as the single source of truth for project state.
+
+## Quick-Start
+
+The 3 core files for agent coordination:
+
+### PLAN.md — Strategy
+
+```markdown
+# Plan: <Project>
+## Goal
+One-line objective.
+## Strategy
+High-level approach.
+## Phases
+### Phase 1: <Name> [IN_PROGRESS]
+- Objective: What this achieves
+- Success criteria: How we know it's done
+```
+
+### TODO.md — Tasks
+
+```markdown
+# TODO
+## Current Sprint
+### In Progress
+- [ ] agent: Task description
+### Ready
+- [ ] agent: Task description
+### Blocked
+- [ ] agent: Task (blocked by: X)
+```
+
+### SESSION.md — Handoff
+
+```markdown
+# Session: YYYY-MM-DD HH:MM
+## Context
+What we were working on.
+## Current State
+- PLAN phase: X, TODO items: Y, Blockers: None
+## Next Actions
+1. Complete X (assigned to: agent)
+2. Start Y
+```
 
 ## File Overview
 

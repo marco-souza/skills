@@ -29,6 +29,7 @@ skills/
 │   ├── install.go
 │   ├── uninstall.go
 │   ├── init.go
+│   ├── validate.go
 │   └── config.go
 ├── internal/
 │   ├── skills/                      # Core skill logic
@@ -40,20 +41,27 @@ skills/
 │   └── config/                      # Persistent CLI config (~/.config/skills/)
 │       └── config.go
 ├── testdata/                        # Test fixtures
-└── .agents/skills/                  # Canonical skill definitions shipped with this repo
+└── .agents/skills/                  # 20 canonical skill definitions shipped with this repo
     ├── brainstorm/
+    ├── code-review/
     ├── create-prd/
+    ├── debug/
+    ├── docs/
     ├── explore/
     ├── git-commit-formatter/
     ├── grill-me/
     ├── implement-tasks/
     ├── markdown-format/
     ├── mixture-of-experts/
+    ├── mock-interview/
     ├── pr-review/
     ├── prd-to-tasks/
     ├── project-files/
+    ├── refactor/
+    ├── security-audit/
     ├── spawn-subagents/
-    └── terminal-multiplexer/
+    ├── terminal-multiplexer/
+    └── test/
 ```
 
 ## Build/Lint/Test Commands
@@ -91,6 +99,70 @@ description: >
   - Include positive triggers ("Use when...")
   - Include negative triggers ("Do NOT use when...")
   - Max 1024 characters
+- `metadata` (optional): Skill configuration including scripts, runtime, and dependencies
+  - Use when the skill requires external scripts, a specific runtime, or depends on other skills
+  - Omit for simple, self-contained skills
+
+### Metadata Field
+
+The `metadata` field provides configuration for skills that require external resources or depend on other skills. It contains three sub-fields:
+
+**`metadata.scripts`** (optional)
+
+Array of script file paths relative to the skill directory. Scripts are executed as part of the skill workflow.
+
+```yaml
+metadata:
+  scripts:
+    - ../../scripts/validate-dag.ts
+    - ../../scripts/generate-prompts.ts
+```
+
+**`metadata.runtime`** (optional)
+
+Specifies the runtime environment required to execute scripts (e.g., `bun`, `node`, `python`).
+
+```yaml
+metadata:
+  runtime: bun
+```
+
+**`metadata.dependencies.skills`** (optional)
+
+Array of skill names that this skill depends on. These skills must be available for the skill to function correctly.
+
+```yaml
+metadata:
+  dependencies:
+    skills:
+      - spawn-subagents
+      - terminal-multiplexer
+```
+
+**Full metadata example:**
+
+```yaml
+---
+name: implement-tasks
+metadata:
+  scripts:
+    - ../../scripts/validate-dag.ts
+    - ../../scripts/generate-prompts.ts
+    - ../../scripts/spawn-wave.sh
+    - ../../scripts/status-tasks.ts
+  runtime: bun
+  dependencies:
+    skills:
+      - spawn-subagents
+      - mixture-of-experts
+      - terminal-multiplexer
+---
+```
+
+Skills that use metadata:
+- `implement-tasks` — uses scripts, runtime, and skill dependencies
+- `prd-to-tasks` — uses scripts, runtime, and skill dependencies
+- `mixture-of-experts` — uses skill dependencies only
 
 ### Description Best Practices
 

@@ -695,6 +695,186 @@ func setupSourceSkillDir(t *testing.T, src, dirName string) string {
 
 // ── install via GitHub (local bare repo) ─────────────────────────────────────
 
+// ── validate command ─────────────────────────────────────────────────────────
+
+func TestValidateCommand(t *testing.T) {
+
+	t.Run("validates valid skills", func(t *testing.T) {
+
+		setupCfg(t)
+
+		src := t.TempDir()
+		setupSourceSkill(t, src, "good-skill", "good-skill", "A valid skill.")
+		setupSourceSkill(t, src, "another-good", "another-good", "Another valid skill.")
+
+		var buf bytes.Buffer
+		c := newValidateCmd()
+		c.SetArgs([]string{"-s", src})
+		c.SetOut(&buf)
+		c.SetErr(&bytes.Buffer{})
+
+		if err := c.Execute(); err != nil {
+			t.Fatalf("validate failed: %v", err)
+		}
+
+		out := buf.String()
+		if !strings.Contains(out, "PASS  good-skill") {
+			t.Error("output missing PASS for good-skill")
+		}
+		if !strings.Contains(out, "PASS  another-good") {
+			t.Error("output missing PASS for another-good")
+		}
+		if !strings.Contains(out, "2 passed, 0 failed") {
+			t.Errorf("unexpected summary: %q", out)
+		}
+	})
+
+	t.Run("reports invalid skills", func(t *testing.T) {
+
+		setupCfg(t)
+
+		src := t.TempDir()
+		skillsDir := filepath.Join(src, skills.DefaultSkillsDir, skills.SkillsSubDir)
+		mustMkdirAll(t, skillsDir, 0o755)
+
+		// Create invalid skill (uppercase name, empty description)
+		skillDir := filepath.Join(skillsDir, "bad-skill")
+		mustMkdirAll(t, skillDir, 0o755)
+		mustWriteFile(t, filepath.Join(skillDir, skills.SkillFileName), []byte("---\nname: BAD_NAME\ndescription: \n---\n"), 0o644)
+
+		var buf bytes.Buffer
+		c := newValidateCmd()
+		c.SetArgs([]string{"-s", src})
+		c.SetOut(&buf)
+		c.SetErr(&bytes.Buffer{})
+
+		err := c.Execute()
+		if err == nil {
+			t.Fatal("expected error for invalid skill")
+		}
+
+		out := buf.String()
+		if !strings.Contains(out, "FAIL  BAD_NAME") {
+			t.Error("output missing FAIL for BAD_NAME")
+		}
+		if !strings.Contains(out, "name must be") {
+			t.Error("output missing validation error details")
+		}
+	})
+
+	t.Run("mixed valid and invalid skills", func(t *testing.T) {
+
+		setupCfg(t)
+
+		src := t.TempDir()
+		skillsDir := filepath.Join(src, skills.DefaultSkillsDir, skills.SkillsSubDir)
+		mustMkdirAll(t, skillsDir, 0o755)
+
+		// Create valid skill
+		setupSourceSkill(t, src, "valid-skill", "valid-skill", "A valid skill.")
+
+		// Create invalid skill
+		skillDir := filepath.Join(skillsDir, "bad-skill")
+		mustMkdirAll(t, skillDir, 0o755)
+		mustWriteFile(t, filepath.Join(skillDir, skills.SkillFileName), []byte("---\nname: bad-skill\n---\n"), 0o644)
+
+		var buf bytes.Buffer
+		c := newValidateCmd()
+		c.SetArgs([]string{"-s", src})
+		c.SetOut(&buf)
+		c.SetErr(&bytes.Buffer{})
+
+		err := c.Execute()
+		if err == nil {
+			t.Fatal("expected error for mixed valid/invalid skills")
+		}
+
+		out := buf.String()
+		if !strings.Contains(out, "PASS  valid-skill") {
+			t.Error("output missing PASS for valid-skill")
+		}
+		if !strings.Contains(out, "FAIL  bad-skill") {
+			t.Error("output missing FAIL for bad-skill")
+		}
+		if !strings.Contains(out, "1 passed, 1 failed") {
+			t.Errorf("unexpected summary: %q", out)
+		}
+	})
+
+	t.Run("empty skills directory", func(t *testing.T) {
+
+		setupCfg(t)
+
+		src := t.TempDir()
+		skillsDir := filepath.Join(src, skills.DefaultSkillsDir, skills.SkillsSubDir)
+		mustMkdirAll(t, skillsDir, 0o755)
+
+		var buf bytes.Buffer
+		c := newValidateCmd()
+		c.SetArgs([]string{"-s", src})
+		c.SetOut(&buf)
+		c.SetErr(&bytes.Buffer{})
+
+		if err := c.Execute(); err != nil {
+			t.Fatalf("validate failed: %v", err)
+		}
+
+		if !strings.Contains(buf.String(), "no skills found") {
+			t.Errorf("expected 'no skills found', got %q", buf.String())
+		}
+	})
+
+	t.Run("nonexistent source directory", func(t *testing.T) {
+
+		setupCfg(t)
+
+		c := newValidateCmd()
+		c.SetArgs([]string{"-s", "/nonexistent/path/that/does/not/exist"})
+		c.SetOut(&bytes.Buffer{})
+		c.SetErr(&bytes.Buffer{})
+
+		err := c.Execute()
+		if err == nil {
+			t.Fatal("expected error for nonexistent source")
+		}
+	})
+
+	t.Run("validates from current directory by default", func(t *testing.T) {
+
+		setupCfg(t)
+
+		dir := t.TempDir()
+		setupSourceSkill(t, dir, "local-skill", "local-skill", "Local skill.")
+
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir failed: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Chdir(cwd); err != nil {
+				t.Fatalf("restore chdir failed: %v", err)
+			}
+		})
+
+		var buf bytes.Buffer
+		c := newValidateCmd()
+		c.SetArgs([]string{})
+		c.SetOut(&buf)
+		c.SetErr(&bytes.Buffer{})
+
+		if err := c.Execute(); err != nil {
+			t.Fatalf("validate failed: %v", err)
+		}
+
+		if !strings.Contains(buf.String(), "PASS  local-skill") {
+			t.Error("output missing PASS for local-skill")
+		}
+	})
+}
+
 // ── list command ─────────────────────────────────────────────────────────────
 
 func TestListCommand(t *testing.T) {

@@ -1,7 +1,17 @@
 ---
 name: mixture-of-experts
-description: Solve complex problems by spawning multiple specialized expert agents that analyze from different angles, then synthesize their insights. Use for architecture decisions, code reviews, complex debugging, or when you need comprehensive analysis.
+description: >
+  Solve complex problems by spawning multiple specialized expert agents
+  that analyze from different angles, then synthesize their insights.
+  Use for architecture decisions, code reviews, complex debugging,
+  or when you need comprehensive analysis.
 metadata:
+  scripts:
+    - ../../scripts/moe-spawn.sh
+    - ../../scripts/moe-wait.sh
+    - ../../scripts/moe-aggregate.sh
+    - ../../scripts/moe-cleanup.sh
+    - ../../scripts/moe-code-review.sh
   dependencies:
     skills:
       - spawn-subagents
@@ -47,183 +57,84 @@ angle. Aggregate their insights into a comprehensive, multi-dimensional answer.
 | `dx-specialist` | Developer experience, tooling, error messages, debugging |
 | `ops-engineer` | Deployment, monitoring, observability, rollback strategies |
 
+## Scripts
+
+This skill provides helper scripts in `.agents/scripts/` for automating the MoE workflow:
+
+| Script | Purpose |
+|--------|---------|
+| `moe-spawn.sh` | Spawn expert agents in parallel |
+| `moe-wait.sh` | Wait for all experts to complete |
+| `moe-aggregate.sh` | Combine results and run aggregator |
+| `moe-cleanup.sh` | Kill sessions and remove temp files |
+| `moe-code-review.sh` | Complete code review workflow |
+
 ## Workflow
 
 ### 1. Define the Problem
 
 Create a clear, specific prompt that all experts will analyze:
 
-```
+```bash
 PROBLEM="Review the authentication flow in src/auth/ for issues and improvements"
+TASK_ID=$(date +%s)
 ```
 
 ### 2. Spawn Experts in Parallel
 
-```bash
-# Define experts to spawn
-EXPERTS="architect security performance maintainer"
-TASK_ID=$(date +%s)
+Use `moe-spawn.sh` to spawn experts:
 
-for expert in $EXPERTS; do
-  session="moe-${TASK_ID}-${expert}"
-  output="/tmp/${session}.out"
-  
-  # Create detached session
-  tmux new-session -d -s "$session"
-  
-  # Build expert-specific prompt
-  case $expert in
-    architect)
-      SYSTEM="You are a software architect. Analyze the design patterns, coupling, and long-term maintainability."
-      ;;
-    security)
-      SYSTEM="You are a security engineer. Find vulnerabilities, injection risks, and auth flaws."
-      ;;
-    performance)
-      SYSTEM="You are a performance engineer. Identify bottlenecks and optimization opportunities."
-      ;;
-    maintainer)
-      SYSTEM="You are a senior maintainer. Evaluate readability, documentation, and testing."
-      ;;
-    minimalist)
-      SYSTEM="You are a minimalist engineer. Find unnecessary complexity and YAGNI violations."
-      ;;
-  esac
-  
-  # Spawn pi with expert system prompt
-  tmux send-keys -t "$session" \
-    "pi --system-prompt '$SYSTEM' -p '$PROBLEM' > $output 2>&1 && echo '___EXPERT_DONE___' >> $output" C-m
-done
+```bash
+source .agents/scripts/moe-spawn.sh
+spawn_moe_experts "architect security performance maintainer"
 ```
 
 ### 3. Wait for All Experts
 
+Use `moe-wait.sh` to wait for completion:
+
 ```bash
-for expert in $EXPERTS; do
-  session="moe-${TASK_ID}-${expert}"
-  output="/tmp/${session}.out"
-  
-  echo "Waiting for $expert..."
-  while ! grep -q "___EXPERT_DONE___" "$output" 2>/dev/null; do
-    sleep 2
-  done
-done
-echo "All experts complete"
+source .agents/scripts/moe-wait.sh
+wait_moe_experts "architect security performance maintainer"
 ```
 
 ### 4. Aggregate Results
 
+Use `moe-aggregate.sh` to combine insights:
+
 ```bash
-# Create aggregator prompt
-AGGREGATOR_INPUT=""
-for expert in $EXPERTS; do
-  session="moe-${TASK_ID}-${expert}"
-  output="/tmp/${session}.out"
-  
-  echo "=== $expert analysis ===" >> /tmp/moe-${TASK_ID}-combined.txt
-  cat "$output" | grep -v "___EXPERT_DONE___" >> /tmp/moe-${TASK_ID}-combined.txt
-  echo "" >> /tmp/moe-${TASK_ID}-combined.txt
-done
-
-# Spawn aggregator
-AGG_SESSION="moe-${TASK_ID}-aggregator"
-tmux new-session -d -s "$AGG_SESSION"
-tmux send-keys -t "$AGG_SESSION" \
-  "cat /tmp/moe-${TASK_ID}-combined.txt | pi -p 'Synthesize these expert analyses into a unified recommendation. Identify conflicts, consensus areas, and priority actions. Structure as: 1) Summary, 2) Areas of Agreement, 3) Conflicts/Trade-offs, 4) Recommended Actions (prioritized)' > /tmp/moe-${TASK_ID}-final.out 2>&1 && echo '___AGGREGATOR_DONE___' >> /tmp/moe-${TASK_ID}-final.out" C-m
-
-# Wait for aggregator
-while ! grep -q "___AGGREGATOR_DONE___" /tmp/moe-${TASK_ID}-final.out 2>/dev/null; do
-  sleep 2
-done
-
-# Display final result
-cat /tmp/moe-${TASK_ID}-final.out | grep -v "___AGGREGATOR_DONE___"
+source .agents/scripts/moe-aggregate.sh
+aggregate_moe_results "architect security performance maintainer"
 ```
 
 ### 5. Cleanup
 
-```bash
-# Kill all sessions
-for expert in $EXPERTS; do
-  tmux kill-session -t "moe-${TASK_ID}-${expert}" 2>/dev/null
-done
-tmux kill-session -t "moe-${TASK_ID}-aggregator" 2>/dev/null
+Use `moe-cleanup.sh` to remove sessions and temp files:
 
-# Remove temp files
-rm -f /tmp/moe-${TASK_ID}-*
+```bash
+source .agents/scripts/moe-cleanup.sh
+cleanup_moe "architect security performance maintainer"
 ```
 
 ## Complete Example: Code Review
 
+Use the `moe-code-review.sh` script for a complete review workflow:
+
 ```bash
-#!/bin/bash
-# MoE Code Review for a specific file
-
-FILE="src/auth/login.ts"
-TASK_ID=$(date +%s)
-EXPERTS="architect security performance maintainer"
-
-echo "🔍 Starting Mixture of Experts review of $FILE..."
-
-# Read file content
-FILE_CONTENT=$(cat "$FILE")
-PROBLEM="Review this code for issues and improvements:\n\n\`\`\`typescript\n$FILE_CONTENT\n\`\`\`"
-
-# Spawn experts
-for expert in $EXPERTS; do
-  session="moe-${TASK_ID}-${expert}"
-  tmux new-session -d -s "$session"
-  
-  case $expert in
-    architect)
-      PROMPT="As an architect, analyze: design patterns, separation of concerns, extensibility, and technical debt. $PROBLEM"
-      ;;
-    security)
-      PROMPT="As a security engineer, find: vulnerabilities, injection risks, auth bypasses, and data leaks. $PROBLEM"
-      ;;
-    performance)
-      PROMPT="As a performance engineer, identify: bottlenecks, unnecessary computations, memory issues, and N+1 queries. $PROBLEM"
-      ;;
-    maintainer)
-      PROMPT="As a maintainer, evaluate: readability, comments, test coverage, error handling, and debuggability. $PROBLEM"
-      ;;
-  esac
-  
-  tmux send-keys -t "$session" "pi -p '$PROMPT' > /tmp/${session}.out 2>&1 && echo DONE >> /tmp/${session}.out" C-m
-  echo "  → $expert spawned"
-done
-
-# Wait for completion
-echo "⏳ Waiting for all experts..."
-for expert in $EXPERTS; do
-  while ! grep -q "DONE" "/tmp/moe-${TASK_ID}-${expert}.out" 2>/dev/null; do
-    sleep 1
-  done
-  echo "  ✓ $expert complete"
-done
-
-# Aggregate
-echo "🧠 Synthesizing insights..."
-COMBINED=""
-for expert in $EXPERTS; do
-  OUT=$(cat "/tmp/moe-${TASK_ID}-${expert}.out" | grep -v "DONE")
-  COMBINED="$COMBINED\n\n=== $expert ===\n$OUT"
-done
-
-echo -e "$COMBINED" | pi -p 'Synthesize these expert reviews into actionable recommendations. Format: Consensus (agreed by 3+ experts), Important (2 experts), Worth Considering (1 expert). Then give top 3 priority fixes.'
-
-# Cleanup
-for expert in $EXPERTS; do
-  tmux kill-session -t "moe-${TASK_ID}-${expert}" 2>/dev/null
-done
-rm -f /tmp/moe-${TASK_ID}-*
-
-echo "✅ MoE review complete"
+# Run MoE code review on a specific file
+./.agents/scripts/moe-code-review.sh src/auth/login.ts
 ```
+
+The script will:
+1. Read the file content
+2. Spawn architect, security, performance, and maintainer experts
+3. Wait for all experts to complete
+4. Synthesize results into actionable recommendations
+5. Clean up sessions and temp files
 
 ## Advanced: Weighted Aggregation
 
-When experts have different importance:
+For weighted aggregation, modify the aggregator prompt in `moe-aggregate.sh`:
 
 ```bash
 # Define weights
@@ -232,7 +143,7 @@ security=3
 performance=2
 maintainer=2
 
-# Build weighted prompt for aggregator
+# Build weighted prompt
 WEIGHTED_PROMPT="Synthesize with these expert weights:\n"
 for expert in $EXPERTS; do
   weight=$(eval echo \$$expert)

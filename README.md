@@ -35,6 +35,7 @@ skills uninstall my-new-skill
 | `skills uninstall <skill>...` | `rm`, `remove` | Remove skill(s) from a project |
 | `skills add <name>` | `a` | Create a new skill from template |
 | `skills init [path]` | — | Initialize a project with `.agents` structure |
+| `skills validate [path]` | — | Validate skills against the standard |
 | `skills config` | — | Manage persistent CLI configuration |
 
 ### Global Flags
@@ -118,6 +119,24 @@ skills uninstall git-commit-formatter pr-review -t ~/my-project
 | Flag | Description |
 |------|-------------|
 | `-t, --target string` | Target project directory (default: current) |
+
+### `skills validate` / `skills v`
+
+Validate all skills in a directory against the Agent Skills standard. Checks frontmatter, name format, description length, and required fields.
+
+```bash
+skills validate                          # Validate local .agents/skills
+skills validate --source ~/my-project    # Validate skills in another project
+skills validate -s /path/to/skills-repo  # Validate from a skills collection
+```
+
+| Flag | Description |
+|------|-------------|
+| `-s, --source string` | Project root containing `.agents/skills/` (default: current) |
+
+Exit codes:
+- `0` — All skills valid
+- `1` — One or more skills invalid (details printed to stderr)
 
 ### `skills config`
 
@@ -214,6 +233,7 @@ metadata:
 |----------------|------|-------------|
 | `scripts` | `string[]` | Relative paths from the skill directory to script files |
 | `runtime` | `string` | Runtime hint (e.g., `bun`, `node`, `bash`) |
+| `dependencies.skills` | `string[]` | Skill names this skill depends on (installed automatically) |
 
 Paths are resolved relative to the skill directory. For example, `../../scripts/helper.ts` resolves to `.agents/scripts/helper.ts` in the source project.
 
@@ -223,11 +243,9 @@ Paths are resolved relative to the skill directory. For example, `../../scripts/
 |-------|----------|-------|
 | `name` | Yes | 1-64 chars, lowercase + hyphens only, must match directory |
 | `description` | Yes | Max 1024 chars, must include "Use when" and "Do NOT use when" |
-| `tags` | No | Array of strings |
-| `category` | No | Single string (e.g., `git`, `review`, `terminal`) |
-| `author` | No | Author name |
-| `version` | No | Semver string |
-| `metadata` | No | Object with `scripts` (paths) and `runtime` fields |
+| `metadata` | No | Object with `scripts`, `runtime`, and `dependencies` fields |
+
+> **Note:** Stick to the [Agent Skills standard](https://agentskills.io/specification). Do not add non-standard fields like `tags`, `version`, `category`, or `author` to frontmatter.
 
 ---
 
@@ -253,7 +271,7 @@ skills/
 │   └── config/               # Persistent CLI config
 │       └── config.go
 ├── main.go
-├── .agents/skills/         # This repo's skill definitions
+├── .agents/skills/         # 20 canonical skill definitions
 ├── testdata/               # Test fixtures
 └── go.mod
 ```

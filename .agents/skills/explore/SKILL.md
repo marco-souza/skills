@@ -1,6 +1,9 @@
 ---
 name: explore
-description: Research and explore codebases to build context before making changes. Use when starting work on an unfamiliar project, investigating a bug, planning a feature, or when you need to understand how something works.
+description: >
+  Research and explore codebases to build context before making changes.
+  Use when starting work on an unfamiliar project, investigating a bug,
+  planning a feature, or when you need to understand how something works.
 ---
 
 # Explore
@@ -43,6 +46,62 @@ Before assuming:
 - "What would break if I changed this?"
 - "Is this used in production or just tests?"
 
+## Modern CLI Tools
+
+Use modern alternatives for faster, more ergonomic exploration. Install them if available:
+
+### Tool Comparison
+
+| Task | Traditional | Modern Alternative | Why Modern is Better |
+|------|-------------|-------------------|----------------------|
+| Search text in files | `grep` | `ripgrep` (`rg`) | Faster, respects `.gitignore`, better output formatting |
+| Find files | `find` | `fd` | Faster, simpler syntax, respects `.gitignore` |
+| View files | `cat` | `bat` | Syntax highlighting, line numbers, Git integration |
+| View diffs | `git diff` | `delta` | Syntax-highlighted diffs, side-by-side view, line numbers |
+
+### Installation
+
+```bash
+# macOS (Homebrew)
+brew install ripgrep fd bat delta
+
+# Ubuntu/Debian
+sudo apt install ripgrep fd-find bat
+# Note: Ubuntu binary is 'fdfind', symlink: sudo ln -sf $(which fdfind) /usr/local/bin/fd
+
+# Arch Linux
+sudo pacman -S ripgrep fd bat delta
+
+# Check if installed
+command -v rg fd bat delta 2>/dev/null || echo 'Some tools not installed'
+```
+
+### Quick Usage
+
+```bash
+# ripgrep - faster grep
+grep -r 'TODO' src/           # Traditional
+rg 'TODO' src/                # Modern (faster, cleaner output)
+rg -t ts 'interface'          # Search only TypeScript files
+
+# fd - faster find
+find . -name '*.ts'           # Traditional
+fd '\.ts$'                    # Modern (regex support)
+fd -e ts                      # By extension
+
+# bat - better cat
+cat README.md                 # Traditional
+bat README.md                 # Modern (syntax highlighting)
+bat -l yaml config.yml        # Force language
+
+# delta - better diffs
+git diff                      # Traditional
+git diff | delta              # Modern (syntax highlighting)
+delta --side-by-side          # Side-by-side view
+```
+
+---
+
 ## Phase 1: Project Reconnaissance (5 min)
 
 ### Read Entry Points
@@ -52,6 +111,10 @@ Before assuming:
 cat README.md                    # Project overview, setup, conventions
 cat package.json 2>/dev/null     # Dependencies, scripts, metadata
 cat AGENTS.md 2>/dev/null        # Project-specific agent instructions
+
+# Or with bat (if available)
+bat README.md                     # Syntax-highlighted view with line numbers
+bat package.json 2>/dev/null     # Better readability for JSON
 ```
 
 ### Map Structure
@@ -61,6 +124,10 @@ cat AGENTS.md 2>/dev/null        # Project-specific agent instructions
 ls -la                           # Root contents
 find . -maxdepth 2 -type d       # Top-level directories
 tree -L 2 2>/dev/null || find . -maxdepth 2 -type d | head -20
+
+# Or with fd (if available)
+fd -d 2 -t d                    # Top-level directories (simpler syntax)
+fd -d 3 -e ts -e go             # Find source files up to 3 levels deep
 ```
 
 ### Identify Technology Stack
@@ -70,6 +137,10 @@ tree -L 2 2>/dev/null || find . -maxdepth 2 -type d | head -20
 grep -l "react\|vue\|angular" package.json 2>/dev/null && echo "Frontend framework detected"
 grep -l "express\|fastify\|hono" package.json 2>/dev/null && echo "Backend framework detected"
 grep -l "prisma\|drizzle\|typeorm" package.json 2>/dev/null && echo "ORM detected"
+
+# Or with ripgrep (if available)
+rg -l 'react|vue|angular' package.json 2>/dev/null && echo "Frontend framework detected"
+rg -l 'prisma|drizzle' package.json 2>/dev/null && echo "ORM detected"
 ```
 
 ### Output: Create SESSION.md Entry
@@ -96,6 +167,9 @@ git log --pretty=format: --name-only | sort | uniq -c | sort -rg | head -20
 
 # Or find most imported modules
 grep -r "^import.*from" --include="*.ts" --include="*.js" | cut -d'"' -f2 | sort | uniq -c | sort -rg | head -20
+
+# With ripgrep (faster)
+rg -o 'from ["\'][^"\']+["\']' -t ts | sed 's/from //g' | sort | uniq -c | sort -rg | head -20
 ```
 
 ### Trace Data Flow
@@ -106,11 +180,20 @@ Pick a key entity (e.g., "User", "Order") and trace it:
 # Find where it's defined
 grep -r "interface User\|type User\|class User" --include="*.ts" | head -5
 
+# With ripgrep
+rg 'interface User|type User|class User' -t ts | head -5
+
 # Find where it's used
 grep -r "User" --include="*.ts" | grep -v node_modules | wc -l
 
+# With ripgrep (auto-ignores node_modules)
+rg -c 'User' -t ts | head -10
+
 # Find API endpoints that handle it
 grep -r "user\|User" src/api/ --include="*.ts" | head -10
+
+# With ripgrep
+cd src/api && rg -i 'user' -t ts | head -10
 ```
 
 ### Map Dependencies
@@ -119,8 +202,14 @@ grep -r "user\|User" src/api/ --include="*.ts" | head -10
 # What does this module depend on?
 cat src/auth/login.ts | grep "^import"
 
+# Or with bat + rg
+bat src/auth/login.ts | rg '^import'
+
 # What depends on this module?
 grep -r "from.*auth/login" --include="*.ts" | head -10
+
+# With ripgrep
+rg 'from.*auth/login' -t ts | head -10
 ```
 
 ### Document in STRUCTURE.md
@@ -163,8 +252,14 @@ Given a task (e.g., "fix login bug"):
 # Search for keywords
 grep -r "login\|signin\|authenticate" --include="*.ts" | grep -v test | head -10
 
+# With ripgrep (cleaner, faster)
+rg -g '!*.test.ts' 'login|signin|authenticate' -t ts | head -10
+
 # Find related tests (show usage patterns)
 grep -r "login" --include="*.test.ts" | head -5
+
+# With ripgrep
+fd -e test.ts && rg 'login' -g '*.test.ts' | head -5
 
 # Check recent changes
 git log --oneline --all --grep="login" | head -5
@@ -186,6 +281,9 @@ cat src/services/auth.ts
 # Data layer
 cat src/repositories/user.ts
 # → Calls prisma.user.findUnique()
+
+# With bat (better readability)
+bat src/api/auth.ts src/services/auth.ts src/repositories/user.ts
 ```
 
 ### Understand Edge Cases
@@ -235,11 +333,20 @@ Before proceeding, verify:
 # "This function is only called from X"
 grep -r "functionName" --include="*.ts" | grep -v "def\|export" | wc -l
 
+# With ripgrep
+rg -c 'functionName' -t ts  # Shows count per file
+
 # "This is always a string"
 grep -r "variableName:" --include="*.ts" | head -5
 
+# With ripgrep
+rg 'variableName:' -t ts | head -5
+
 # "This mutation updates the database"
 grep -A 10 "mutationName" src/services/*.ts | grep -E "prisma|save|update"
+
+# With ripgrep
+rg -A 10 'mutationName' -t ts | rg 'prisma|save|update'
 ```
 
 ## Exploration Outputs
@@ -338,6 +445,10 @@ git diff main...feature-branch --stat
 # 4. Verify assumptions
 # - Does this break existing code?
 # - Are there migration concerns?
+
+# 5. Review with delta (if available)
+git diff main...feature-branch | delta          # Syntax-highlighted diff
+delta --side-by-side main...feature-branch     # Side-by-side view
 ```
 
 ## Anti-Patterns (DON'Ts)
@@ -366,4 +477,20 @@ grep -r "^export" --include="*.ts" src/some-module/
 
 # Find TODO/FIXME comments
 grep -r "TODO\|FIXME\|XXX\|HACK" --include="*.ts" src/
+```
+
+### With ripgrep (faster alternatives)
+
+```bash
+# Find function definitions
+rg '(function|const|async function) name' -t ts
+
+# Find all imports of a module
+rg 'from.*module-name' -t ts
+
+# Find exported items
+rg '^export' -t ts src/some-module/
+
+# Find TODO/FIXME comments
+rg 'TODO|FIXME|XXX|HACK' -t ts src/
 ```
